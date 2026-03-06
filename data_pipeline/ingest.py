@@ -36,8 +36,7 @@ def inspect_dataset(df, source_name="uploaded_file"):
 
 
 if __name__ == "__main__":
-    example_path = "sample_data/example.csv"
-
+    example_path = "sample_data/Danone sensor dataset 2.csv"
     try:
         df = load_dataset(example_path)
         summary = inspect_dataset(df, source_name=example_path)
