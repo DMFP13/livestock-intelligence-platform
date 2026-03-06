@@ -42,7 +42,7 @@ def clean_danone_dataset(df, source_name="uploaded_file"):
     df = df.rename(columns=COLUMN_RENAME_MAP)
 
     if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+        df["date"] = pd.to_datetime(df["date"], errors="coerce", dayfirst=True).dt.date
 
     df["source_file"] = source_name
     df = df.dropna(how="all")
