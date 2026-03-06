@@ -1,23 +1,12 @@
-import pandas as pd
+from pathlib import Path
+import sys
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-def load_processed_data(file_path):
-    return pd.read_csv(file_path)
-
-
-def build_herd_summary(df):
-    summary = {
-        "row_count": len(df),
-        "unique_animals": df["animal_id"].nunique(),
-        "unique_dates": df["date"].nunique(),
-        "avg_rumination_min": round(df["rumination_min"].mean(), 2),
-        "avg_activity_rate": round(df["activity_rate"].mean(), 2),
-        "avg_standing_min": round(df["standing_min"].mean(), 2),
-        "avg_eating_min": round(df["eating_min"].mean(), 2),
-        "avg_resting_min": round(df["resting_min"].mean(), 2),
-        "avg_data_collection_rate_pct": round(df["data_collection_rate_pct"].mean(), 2),
-    }
-    return summary
+from services.data_loader import load_processed_data
+from services.network_analysis import build_executive_overview, build_network_metric_summary
 
 
 if __name__ == "__main__":
@@ -25,12 +14,16 @@ if __name__ == "__main__":
 
     try:
         df = load_processed_data(input_path)
-        summary = build_herd_summary(df)
+        overview = build_executive_overview(df)
+        metric_summary = build_network_metric_summary(df)
 
         print("\nHERD SUMMARY")
         print("-" * 50)
-        for key, value in summary.items():
+        for key, value in overview.items():
             print(f"{key}: {value}")
+
+        print("\nNETWORK METRICS")
+        print(metric_summary.to_string(index=False))
 
     except Exception as e:
         print(f"Error: {e}")

@@ -1,8 +1,12 @@
-import pandas as pd
+from pathlib import Path
+import sys
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-def load_processed_data(file_path):
-    return pd.read_csv(file_path)
+from services.cow_analysis import list_cows
+from services.data_loader import load_processed_data
 
 
 if __name__ == "__main__":
@@ -10,14 +14,13 @@ if __name__ == "__main__":
 
     try:
         df = load_processed_data(input_path)
-
-        animals = sorted(df["animal_id"].unique())
+        animals = list_cows(df)
 
         print("\nANIMALS IN DATASET")
         print("-" * 50)
 
-        for a in animals:
-            print(a)
+        for animal in animals:
+            print(animal)
 
         print("\nTotal animals:", len(animals))
 
