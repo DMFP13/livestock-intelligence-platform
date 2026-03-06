@@ -37,33 +37,15 @@ def load_dataset(file_path):
     return df
 
 
-def inspect_dataset(df, source_name="uploaded_file"):
-    return {
-        "source_file": source_name,
-        "row_count": len(df),
-        "column_count": len(df.columns),
-        "columns": list(df.columns),
-        "missing_values": df.isnull().sum().to_dict(),
-    }
-
-
 def clean_danone_dataset(df, source_name="uploaded_file"):
     df = df.copy()
-
-    # Rename columns
     df = df.rename(columns=COLUMN_RENAME_MAP)
 
-    # Convert date column
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
 
-    # Add source file
     df["source_file"] = source_name
-
-    # Remove fully empty rows
     df = df.dropna(how="all")
-
-    # Remove duplicate rows
     df = df.drop_duplicates()
 
     return df
@@ -71,8 +53,8 @@ def clean_danone_dataset(df, source_name="uploaded_file"):
 
 def build_validation_report(raw_df, cleaned_df, source_name):
     expected_columns = list(COLUMN_RENAME_MAP.values()) + ["source_file"]
-
     present_columns = list(cleaned_df.columns)
+
     missing_expected_columns = [
         col for col in expected_columns if col not in present_columns
     ]
