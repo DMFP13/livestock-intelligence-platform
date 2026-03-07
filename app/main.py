@@ -219,7 +219,11 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
     print(f"[timing] outcome_bundle_cache_call elapsed_s={perf_counter() - t_outcome:.4f}")
     state_frame = outcome_bundle.get("state_frame", pd.DataFrame())
 
-    feed_environment_payload = build_feed_environment_payload(df)
+    feed_environment_payload = build_feed_environment_payload(
+        df,
+        service=platform_service,
+        connector_keys=connector_list,
+    )
     market_finance_payload = build_market_finance_payload(
         source_mode=source_mode,
         service=platform_service,

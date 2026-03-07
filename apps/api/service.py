@@ -4,7 +4,10 @@ from typing import Any
 
 from packages.connectors.prices import PricesConnector
 from packages.connectors.registry import ConnectorRegistry
-from packages.connectors.remote_sensing_placeholder import RemoteSensingPlaceholderConnector
+from packages.connectors.remote_sensing_placeholder import (
+    RemoteSensingPlaceholderConnector,
+    RemoteSensingScaffoldConnector,
+)
 from packages.connectors.sensor_upload import SensorUploadConnector
 from packages.connectors.weather import WeatherConnector
 from packages.db.sqlite_store import SQLiteStore
@@ -19,6 +22,8 @@ class PlatformService:
         self.registry.register("sensor_upload", SensorUploadConnector())
         self.registry.register("weather", WeatherConnector())
         self.registry.register("prices", PricesConnector())
+        self.registry.register("remote_sensing_scaffold", RemoteSensingScaffoldConnector())
+        # Backward-compat key kept during scaffold migration.
         self.registry.register("remote_sensing_placeholder", RemoteSensingPlaceholderConnector())
         self.pipeline = IngestionPipeline(self.registry, self.store)
 

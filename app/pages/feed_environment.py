@@ -6,6 +6,20 @@ import streamlit as st
 def render_feed_environment(payload: dict) -> None:
     st.subheader("Feed & Environment")
 
+    remote = payload.get("remote_sensing", {}) or {}
+    st.markdown("#### Remote Sensing")
+    remote_status = remote.get("status", "unknown")
+    if remote_status == "available":
+        r1, r2, r3 = st.columns(3)
+        r1.metric("Remote Status", "available")
+        r2.metric("Locations Covered", f"{int(remote.get('locations_covered', 0))}")
+        r3.metric("Latest Scene", remote.get("latest_at") or "n/a")
+        metrics = remote.get("metrics_available", [])
+        if metrics:
+            st.caption(f"Metrics available: {', '.join(metrics)}")
+    else:
+        st.info(remote.get("message", "Remote sensing scaffold is not configured."))
+
     status = payload.get("status")
     if status != "ok":
         st.info(payload.get("message", "Feed/environment view unavailable."))
