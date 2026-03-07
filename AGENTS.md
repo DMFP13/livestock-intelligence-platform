@@ -1,42 +1,38 @@
-This repository develops a livestock behaviour analytics platform using dairy cow sensor datasets.
+# Project Agent Guide
 
-Repository structure
+## Project Purpose
+Build an extensible livestock intelligence platform that supports heterogeneous agricultural, environmental, financial, operational, and image-based data while preserving the existing drill-down usability.
 
-data_pipeline/
-    ingest.py
-        Loads raw CSV/XLSX datasets, standardizes behavioural columns,
-        parses dates, validates structure, and writes a processed dataset.
+## Architecture Rules
+- Preserve drill-down hierarchy: `network -> farm -> herd/group -> animal -> metric`
+- Never couple UI directly to raw source payloads
+- Route all source data through: connector -> intake -> validation -> normalization -> storage -> analytics -> presentation
+- Analytics modules must consume canonical internal records only
+- Maintain compatibility with uploaded files and future live API connectors
+- Every ingested record must carry provenance (`sourceSystem`, `sourceRecordId` where available, `timestamp`, `qualityFlag`, `metadata`)
 
-analytics/
-    herd_summary.py
-        Herd-level behaviour statistics.
+## Coding Constraints
+- Prefer additive refactors over breaking changes
+- Quarantine bad/unmatched records; do not silently coerce invalid source data
+- Fail explicitly and log ingestion/run diagnostics
+- Keep current app runnable while modularizing
 
-    cow_summary.py
-        Individual cow behaviour statistics.
+## Current Priorities
+Phase 1 first:
+1. modular structure
+2. canonical schema and DB tables
+3. connector interface + registry
+4. sensor/weather/prices ingestion through generic pipeline
+5. API/service layer for canonical data and run quality
+6. data quality visibility
 
-    list_animals.py
-        Lists animal IDs in the dataset.
-
-    plot_cow_timeseries.py
-        Generates time-series plots for individual cows.
-
-sample_data/
-    Danone sensor dataset 2.csv
-        Raw dataset.
-
-    processed_danone_sensor_dataset_2.csv
-        Cleaned dataset used by analytics scripts.
-
-outputs/
-    plots/
-        Generated time-series visualisations.
-
-Development rules
-
-- keep ingestion code in data_pipeline/
-- keep analytics scripts in analytics/
-- keep generated artefacts in outputs/
-- avoid modifying unrelated files
-- prefer small, testable commits
-- maintain biological plausibility in analytics logic
-- implement features incrementally
+## Handoff Expectations
+Update `docs/handoffs/YYYY-MM-DD-phase-ticket-summary.md` for each meaningful chunk including:
+- objective completed
+- files changed
+- schema changes
+- endpoints added
+- UI modules touched
+- tests added/passed
+- known issues
+- next recommended step

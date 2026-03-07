@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CanonicalRecordEnvelope",
+  "type": "object",
+  "required": ["sourceSystem", "timestamp", "qualityFlag"],
+  "properties": {
+    "sourceSystem": {"type": "string"},
+    "sourceRecordId": {"type": ["string", "null"]},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "qualityFlag": {"type": "string", "enum": ["good", "suspect", "bad", "quarantined"]},
+    "metadata": {"type": "object"}
+  },
+  "additionalProperties": true
+}
