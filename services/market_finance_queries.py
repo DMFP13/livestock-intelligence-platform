@@ -6,6 +6,7 @@ import pandas as pd
 
 from apps.api.service import PlatformService
 from packages.analytics.market import summarize_market_trends
+from services.live_visibility import connector_visibility
 
 
 def query_reference_series_from_store(service: PlatformService | None, limit: int = 5000) -> pd.DataFrame:
@@ -73,6 +74,7 @@ def build_market_finance_payload(
     processed_df: pd.DataFrame,
     limit: int = 5000,
 ) -> dict[str, Any]:
+    live_prices = connector_visibility(service, "prices")
     canonical_df = query_reference_series_from_store(service, limit=limit)
     fallback_df = pd.DataFrame(columns=canonical_df.columns)
     origin = "canonical_store"
@@ -92,6 +94,7 @@ def build_market_finance_payload(
             "reference_df": reference_df,
             "summary_df": summary_df,
             "chart_series": {},
+            "live_prices": live_prices,
         }
 
     chart_series: dict[str, pd.DataFrame] = {}
@@ -107,4 +110,5 @@ def build_market_finance_payload(
         "reference_df": reference_df,
         "summary_df": summary_df,
         "chart_series": chart_series,
+        "live_prices": live_prices,
     }

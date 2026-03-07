@@ -6,6 +6,7 @@ import pandas as pd
 
 from apps.api.service import PlatformService
 from packages.analytics.thi import compute_thi
+from services.live_visibility import connector_visibility
 
 REMOTE_SENSING_METRICS = [
     "ndvi",
@@ -14,11 +15,41 @@ REMOTE_SENSING_METRICS = [
     "water_point_status",
     "land_condition_score",
 ]
+WEATHER_METRICS = ["temperature_c", "humidity_pct", "thi"]
 
 
 def _available_metrics(df: pd.DataFrame) -> list[str]:
     candidates = ["rumination_min", "eating_min", "activity_rate", "temperature_c", "humidity_pct", "thi"]
     return [m for m in candidates if m in df.columns]
+
+
+def query_weather_observations(
+    service: PlatformService | None,
+    *,
+    limit: int = 20000,
+) -> pd.DataFrame:
+    cols = ["date", "temperature_c", "humidity_pct", "thi"]
+    if service is None:
+        return pd.DataFrame(columns=cols)
+    rows = service.list_observations(limit=limit)
+    if not rows:
+        return pd.DataFrame(columns=cols)
+    obs = pd.DataFrame(rows)
+    if obs.empty or "metric" not in obs.columns or "observed_at" not in obs.columns:
+        return pd.DataFrame(columns=cols)
+    obs = obs[obs["metric"].astype(str).isin(WEATHER_METRICS)].copy()
+    if obs.empty:
+        return pd.DataFrame(columns=cols)
+    obs["date"] = pd.to_datetime(obs["observed_at"], errors="coerce")
+    obs = obs.dropna(subset=["date"])
+    if obs.empty:
+        return pd.DataFrame(columns=cols)
+    wide = (
+        obs.pivot_table(index="date", columns="metric", values="value_num", aggfunc="mean")
+        .reset_index()
+        .rename_axis(None, axis=1)
+    )
+    return wide
 
 
 def query_remote_sensing_observations(
@@ -77,8 +108,35 @@ def build_feed_environment_payload(
     connector_registered = "remote_sensing_scaffold" in (connector_keys or [])
     remote_df = query_remote_sensing_observations(service)
     remote_summary = build_remote_sensing_summary(remote_df, connector_registered)
+    live_weather_status = connector_visibility(service, "weather")
 
     if df is None or df.empty:
+        live_weather_df = query_weather_observations(service)
+        if not live_weather_df.empty:
+            live_weather_df["date_day"] = live_weather_df["date"].dt.floor("D")
+            ts = live_weather_df.groupby("date_day", as_index=False).agg(
+                {
+                    m: "mean"
+                    for m in [c for c in ["temperature_c", "humidity_pct", "thi"] if c in live_weather_df.columns]
+                }
+            )
+            ts = ts.rename(columns={"date_day": "date"})
+            return {
+                "status": "ok",
+                "message": "",
+                "timeseries": ts,
+                "current_metrics": [
+                    {"metric": m, "value": float(ts[m].iloc[-1]), "delta": None}
+                    for m in [c for c in ["temperature_c", "humidity_pct", "thi"] if c in ts.columns]
+                ],
+                "derived": {
+                    "days": int(len(ts)),
+                    "heat_stress_days": int((ts["thi"] >= 72).sum()) if "thi" in ts.columns else None,
+                    "has_environment_signals": True,
+                },
+                "remote_sensing": remote_summary,
+                "live_weather": live_weather_status,
+            }
         return {
             "status": "empty",
             "message": "No data available.",
@@ -86,6 +144,7 @@ def build_feed_environment_payload(
             "current_metrics": [],
             "derived": {},
             "remote_sensing": remote_summary,
+            "live_weather": live_weather_status,
         }
 
     if "date" not in df.columns:
@@ -96,6 +155,7 @@ def build_feed_environment_payload(
             "current_metrics": [],
             "derived": {},
             "remote_sensing": remote_summary,
+            "live_weather": live_weather_status,
         }
 
     source = df.dropna(subset=["date"]).copy()
@@ -107,6 +167,7 @@ def build_feed_environment_payload(
             "current_metrics": [],
             "derived": {},
             "remote_sensing": remote_summary,
+            "live_weather": live_weather_status,
         }
 
     metrics = _available_metrics(source)
@@ -118,10 +179,25 @@ def build_feed_environment_payload(
             "current_metrics": [],
             "derived": {},
             "remote_sensing": remote_summary,
+            "live_weather": live_weather_status,
         }
 
     source["date_day"] = source["date"].dt.floor("D")
     ts = source.groupby("date_day", as_index=False).agg({m: "mean" for m in metrics}).rename(columns={"date_day": "date"})
+
+    live_weather_df = query_weather_observations(service)
+    if not live_weather_df.empty:
+        live_weather_df["date_day"] = live_weather_df["date"].dt.floor("D")
+        live_ts = live_weather_df.groupby("date_day", as_index=False).agg(
+            {m: "mean" for m in [c for c in WEATHER_METRICS if c in live_weather_df.columns]}
+        )
+        live_ts = live_ts.rename(columns={"date_day": "date"})
+        ts = (
+            pd.concat([ts, live_ts], ignore_index=True)
+            .groupby("date", as_index=False)
+            .agg({m: "mean" for m in sorted(set(ts.columns).union(set(live_ts.columns)) - {"date"})})
+            .sort_values("date")
+        )
 
     if "thi" not in ts.columns and {"temperature_c", "humidity_pct"}.issubset(set(ts.columns)):
         ts["thi"] = ts.apply(lambda r: compute_thi(float(r["temperature_c"]), float(r["humidity_pct"])), axis=1)
@@ -155,4 +231,5 @@ def build_feed_environment_payload(
         "current_metrics": current_metrics,
         "derived": derived,
         "remote_sensing": remote_summary,
+        "live_weather": live_weather_status,
     }

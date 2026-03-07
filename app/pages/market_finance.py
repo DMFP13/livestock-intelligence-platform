@@ -5,6 +5,15 @@ import streamlit as st
 
 def render_market_finance(payload: dict) -> None:
     st.subheader("Market & Finance")
+    live_prices = payload.get("live_prices", {}) or {}
+    st.markdown("#### Live Prices/FX Connector")
+    st.caption(f"Status: {live_prices.get('status', 'unknown')}")
+    if live_prices.get("last_success_at") or live_prices.get("last_failure_at"):
+        st.caption(
+            f"Last success: {live_prices.get('last_success_at') or 'n/a'} | "
+            f"Last failure: {live_prices.get('last_failure_at') or 'n/a'}"
+        )
+    st.info(live_prices.get("message", "Prices connector status unavailable."))
 
     status = payload.get("status")
     if status != "ok":

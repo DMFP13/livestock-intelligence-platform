@@ -131,6 +131,16 @@ class PlatformService:
             missing = [k for k in caps.get("required_config", []) if merged_cfg.get(k) in (None, "", {})]
             if missing:
                 raise ValueError(f"active source config missing required fields: {missing}")
+            connector = self.registry.get(connector_key)
+            ok, msg = connector.testConnection(
+                ConnectorContext(
+                    source_system=source_system,
+                    mode=mode,
+                    config={**merged_cfg, "enabled": True},
+                )
+            )
+            if not ok:
+                raise ValueError(f"active source config failed connector validation: {msg}")
         row = {
             "id": source_id,
             "connector_key": connector_key,
@@ -189,6 +199,16 @@ class PlatformService:
             missing = [k for k in caps.get("required_config", []) if merged_cfg.get(k) in (None, "", {})]
             if missing:
                 raise ValueError(f"cannot activate source config; missing required fields: {missing}")
+            connector = self.registry.get(str(cfg["connector_key"]))
+            ok, msg = connector.testConnection(
+                ConnectorContext(
+                    source_system=str(cfg["source_system"]),
+                    mode=str(cfg["mode"]),
+                    config={**merged_cfg, "enabled": True},
+                )
+            )
+            if not ok:
+                raise ValueError(f"cannot activate source config: {msg}")
         cfg["is_active"] = 1 if is_active else 0
         cfg["updated_at"] = datetime.utcnow().isoformat()
         self.store.upsert_source_config(cfg)

@@ -26,6 +26,8 @@ def list_source_operator_rows(service: PlatformService) -> list[dict[str, Any]]:
                 "endpoint_summary": _endpoint_summary(cfg),
                 "config_summary": _config_summary(cfg),
                 "status": _status_label(cfg, h),
+                "latest_run_result": h.get("status"),
+                "last_sync": h.get("last_sync_at") or h.get("latest_run_at"),
                 "last_success": h.get("last_success_at"),
                 "last_failure": h.get("last_error_at"),
                 "last_error_message": h.get("last_error_message"),

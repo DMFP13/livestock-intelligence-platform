@@ -8,26 +8,35 @@ from packages.analytics.thi import classify_heat_stress, compute_thi
 from packages.core import QualityFlag
 
 from .base import ConnectorCapabilities, ConnectorContext
+from .http_client import build_headers, fetch_json_rows, map_row_fields
 
 
 class WeatherConnector:
     name = "weather"
     CAPABILITIES = ConnectorCapabilities(
         modes=["polling", "webhook", "manual_upload"],
-        required_config=["endpoint_url", "api_key_ref"],
+        required_config=["endpoint_url"],
         supported_entity_levels=["farm", "location"],
         supported_signals=["temperature_c", "humidity_pct", "thi", "heat_stress_alert"],
         supports_polling=True,
         supports_webhook=True,
         supports_manual_upload=True,
     )
+    FIELD_MAP = {
+        "timestamp": "timestamp",
+        "temperature_c": "temperature_c",
+        "humidity_pct": "humidity_pct",
+        "sourceRecordId": "sourceRecordId",
+    }
 
     def testConnection(self, context: ConnectorContext) -> tuple[bool, str]:
         if context.mode in {"uploaded_file", "manual_upload", "webhook"}:
             return True, "ok"
         if context.mode in {"api", "polling"} and context.config.get("enabled"):
-            if not context.config.get("endpoint_url") or not context.config.get("api_key_ref"):
-                return False, "missing endpoint_url/api_key_ref"
+            if not context.config.get("endpoint_url"):
+                return False, "missing endpoint_url"
+            if not self._has_auth(context.config):
+                return False, "missing auth configuration"
             return True, "configured"
         return False, "weather connector not configured for live mode"
 
@@ -35,6 +44,19 @@ class WeatherConnector:
         rows = context.config.get("rows")
         if rows:
             return list(rows)
+        if context.mode == "polling" and context.config.get("enabled"):
+            endpoint = str(context.config.get("endpoint_url") or "")
+            if not endpoint:
+                raise ValueError("missing endpoint_url")
+            raw_rows = fetch_json_rows(
+                endpoint_url=endpoint,
+                headers=build_headers(context.config),
+                query_params=context.config.get("query_params") if isinstance(context.config.get("query_params"), dict) else None,
+                timeout_sec=int(context.config.get("timeout_sec") or 20),
+                response_path=str(context.config.get("response_path")) if context.config.get("response_path") else None,
+            )
+            field_map = self.FIELD_MAP | dict(context.config.get("field_map") or {})
+            return [map_row_fields(r, field_map, passthrough=["farm_id", "location_id"]) for r in raw_rows]
         return []
 
     def validate(self, raw_records: list[dict[str, Any]], context: ConnectorContext) -> tuple[list[dict[str, Any]], list[str]]:
@@ -141,3 +163,16 @@ class WeatherConnector:
             store.upsert_alert(row)
             written += 1
         return written
+
+    @staticmethod
+    def _has_auth(config: dict[str, Any]) -> bool:
+        if config.get("api_key_ref") or config.get("api_key"):
+            return True
+        auth = config.get("auth")
+        if isinstance(auth, dict):
+            if auth.get("bearer_token"):
+                return True
+            headers = auth.get("headers")
+            if isinstance(headers, dict) and len(headers) > 0:
+                return True
+        return False

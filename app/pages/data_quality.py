@@ -9,6 +9,7 @@ from services.operator_controls import (
     test_connector_config,
     toggle_connector_active,
 )
+from services.live_visibility import connector_visibility
 from services.source_health import build_quality_flag_rows, build_source_health_rows
 
 
@@ -47,6 +48,13 @@ def render_data_quality(
     if platform_service is None:
         st.info("Canonical service unavailable; live source controls are disabled.")
     else:
+        weather_state = connector_visibility(platform_service, "weather")
+        prices_state = connector_visibility(platform_service, "prices")
+        st.caption(f"Weather connector: {weather_state.get('status')} | Prices connector: {prices_state.get('status')}")
+        st.info(
+            f"Weather: {weather_state.get('message', '')}\n\n"
+            f"Prices/FX: {prices_state.get('message', '')}"
+        )
         try:
             meta = platform_service.list_connectors_metadata()
             mode_by_connector = {str(m.get("key")): list(m.get("modes") or []) for m in meta}

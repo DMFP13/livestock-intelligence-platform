@@ -6,6 +6,16 @@ import streamlit as st
 def render_feed_environment(payload: dict) -> None:
     st.subheader("Feed & Environment")
 
+    weather_live = payload.get("live_weather", {}) or {}
+    st.markdown("#### Live Weather Connector")
+    st.caption(f"Status: {weather_live.get('status', 'unknown')}")
+    if weather_live.get("last_success_at") or weather_live.get("last_failure_at"):
+        st.caption(
+            f"Last success: {weather_live.get('last_success_at') or 'n/a'} | "
+            f"Last failure: {weather_live.get('last_failure_at') or 'n/a'}"
+        )
+    st.info(weather_live.get("message", "Weather connector status unavailable."))
+
     remote = payload.get("remote_sensing", {}) or {}
     st.markdown("#### Remote Sensing")
     remote_status = remote.get("status", "unknown")

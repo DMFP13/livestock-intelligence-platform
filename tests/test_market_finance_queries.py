@@ -11,6 +11,19 @@ from services.market_finance_queries import (
 )
 
 
+class _FakeSeriesService:
+    def list_reference_series(self, limit: int = 5000):  # noqa: ARG002
+        return [
+            {
+                "series_type": "fx_rate",
+                "series_key": "usd_ngn",
+                "point_at": "2026-03-07T10:00:00",
+                "value": 1510.0,
+                "unit": "ratio",
+            }
+        ]
+
+
 class TestMarketFinanceQueries(unittest.TestCase):
     def test_derive_reference_series_from_processed(self) -> None:
         df = pd.DataFrame(
@@ -48,6 +61,17 @@ class TestMarketFinanceQueries(unittest.TestCase):
         )
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["origin"], "processed_file_fallback")
+
+    def test_build_payload_prefers_canonical_store_series(self) -> None:
+        processed_df = pd.DataFrame([{"date": pd.Timestamp("2026-03-01"), "dairy_price": 50.0}])
+        payload = build_market_finance_payload(
+            source_mode="processed_file",
+            service=_FakeSeriesService(),
+            processed_df=processed_df,
+        )
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["origin"], "canonical_store")
+        self.assertFalse(payload["reference_df"].empty)
 
 
 if __name__ == "__main__":

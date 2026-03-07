@@ -262,16 +262,30 @@ h1, h2, h3, h4, h5, h6,
         )
 
     try:
+        effective_source_mode = source_mode
         if source_mode == "canonical_store":
             df, validation_report = load_app_payload_from_store()
             if df.empty:
                 st.warning("Canonical store has no observation records yet. Falling back to processed file.")
                 df, validation_report = load_app_payload(DATA_PATH)
+                effective_source_mode = "processed_file_fallback"
         else:
             df, validation_report = load_app_payload(DATA_PATH)
+            effective_source_mode = "processed_file"
     except Exception as exc:
         st.error(f"Failed to load dataset: {exc}")
         return
+
+    st.caption(
+        "Effective data path: "
+        + (
+            "canonical_store"
+            if effective_source_mode == "canonical_store"
+            else "processed_file (fallback from canonical_store)"
+            if effective_source_mode == "processed_file_fallback"
+            else "processed_file"
+        )
+    )
 
     farm_table = build_farm_summary_table(df)
     _ensure_session_selection(df, farm_table)

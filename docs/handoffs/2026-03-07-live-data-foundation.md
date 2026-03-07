@@ -218,3 +218,136 @@ Implemented an operator control layer on top of the live-data foundation with sa
 - Scheduler is currently CLI/loop-based and not yet daemonized/supervised.
 - No secure secret manager integration yet for resolving `api_key_ref`.
 - Data Quality page does not yet include raw payload drill-down per run (table exists in DB and can be surfaced later).
+
+---
+
+## Update: First Real Live Connector Pair (Weather + Prices/FX)
+
+### Objective Completed
+Implemented real live polling behavior for weather and prices connectors, normalized into canonical records, and validated end-to-end through the existing live sync framework.
+
+### Delivered
+
+1. Weather connector: live polling enabled
+- `packages/connectors/weather.py`
+- Supports HTTP GET polling via `endpoint_url`.
+- Uses configurable auth/header payload and optional query params/response path.
+- Maps live payload fields into canonical weather observations and derived THI.
+- Emits heat stress alerts as before.
+- Remains safely inactive/failing when config/auth is missing.
+
+2. Prices/FX connector: live polling enabled
+- `packages/connectors/prices.py`
+- Supports HTTP GET polling via `endpoint_url`.
+- Uses configurable auth/header payload and optional query params/response path.
+- Maps live payload to canonical `reference_series`.
+- Remains safely inactive/failing when config/auth is missing.
+
+3. Shared HTTP live client utility
+- Added: `packages/connectors/http_client.py`
+- Centralizes:
+  - JSON polling
+  - response path extraction
+  - auth/header construction
+  - field mapping
+
+4. Activation safety
+- `apps/api/service.py`
+- `upsert_source_config(..., is_active=True)` and `set_source_config_active(..., True)` now validate with connector `testConnection`.
+- Prevents enabling connectors with incomplete config/auth.
+
+5. Feed & Environment live-weather consumption
+- `services/feed_environment_queries.py`
+- Added canonical weather observation query path.
+- Feed/environment payload now consumes canonical live weather observations when available.
+- Keeps processed-file fallback behavior.
+
+6. Market & Finance live prices/FX consumption
+- Existing canonical path already preferred in `services/market_finance_queries.py`.
+- Added tests confirming canonical live series are preferred over processed-file fallback when present.
+
+### Tests Added/Updated
+- New: `tests/test_live_connectors_polling.py`
+  - weather live polling normalization
+  - prices live polling normalization
+  - safe failure on bad response shape
+- Updated: `tests/test_feed_environment_queries.py`
+  - live weather consumption when processed data is empty
+- Updated: `tests/test_market_finance_queries.py`
+  - canonical series preferred over processed-file fallback
+
+### Verification
+- Command: `.venv/bin/python -m unittest discover -s tests -t . -v`
+- Result: passed (32 tests)
+
+### Notes
+- Live connector tests use mocked HTTP at connector-client boundary (no external calls, no socket binding dependency).
+- No aesthetic/UI redesign changes introduced.
+- Processed-file and canonical-store fallback behavior preserved.
+
+---
+
+## Update: Live Visibility Path Fix (Weather + Prices)
+
+### Why Live Connectors Were Not Visible Before
+The live connectors were ingesting correctly, but visibility in the app was incomplete for three reasons:
+1. The UI did not clearly show the **effective** data path when `canonical_store` silently fell back to processed file.
+2. Feed & Environment / Market & Finance pages did not explicitly surface **connector configuration state** (implemented vs configured vs active vs failing), so unconfigured live connectors looked like missing data.
+3. Data Quality showed operator rows, but there was no explicit per-priority connector callout for weather/prices indicating whether the connector was simply unconfigured.
+
+### Fixes Implemented
+
+1. Effective source mode surfaced in app shell
+- `app/main.py`
+- Added explicit caption for effective data path:
+  - `canonical_store`
+  - `processed_file`
+  - `processed_file (fallback from canonical_store)`
+
+2. Reusable live visibility service
+- Added `services/live_visibility.py`
+- Provides connector visibility states:
+  - `not_registered`
+  - `not_configured`
+  - `configured_inactive`
+  - `active_pending`
+  - `active_live`
+  - `active_failing`
+
+3. Data Quality connector-state clarity
+- `app/pages/data_quality.py`
+- Added weather/prices connector state summary and message block.
+- Operator table now includes:
+  - latest run result
+  - last sync
+  - last success/failure
+  - active/inactive status
+- `services/operator_controls.py` updated to include these fields.
+
+4. Feed & Environment live visibility
+- `services/feed_environment_queries.py`
+- Payload now includes `live_weather` status block.
+- `app/pages/feed_environment.py`
+- Renders connector status + last success/failure + explicit message.
+
+5. Market & Finance live visibility
+- `services/market_finance_queries.py`
+- Payload now includes `live_prices` status block.
+- `app/pages/market_finance.py`
+- Renders connector status + last success/failure + explicit message.
+
+6. Placeholder clarity when not configured
+- Weather and prices now explicitly display “implemented but not configured” state via visibility service.
+
+### Tests Added / Updated
+- New: `tests/test_live_visibility_paths.py`
+  - unconfigured connectors visible as `not_configured`
+  - configured+synced connector visible as `active_live`
+  - feed/market payloads include live visibility blocks
+- Updated:
+  - `tests/test_feed_environment_queries.py`
+  - `tests/test_market_finance_queries.py`
+
+### Verification
+- Command: `.venv/bin/python -m unittest discover -s tests -t . -v`
+- Result: passed (35 tests)
