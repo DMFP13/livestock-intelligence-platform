@@ -17,6 +17,7 @@ from app.pages.farm_overview import render_farm_overview
 from app.pages.feed_environment import render_feed_environment
 from app.pages.herd_intelligence import render_herd_intelligence
 from app.pages.market_finance import render_market_finance
+from app.pages.overview import render_overview
 from services.cow_analysis import build_cow_profile_payload, list_cows
 from services.data_loader import build_data_validation_table, load_canonical_data_cached
 from services.event_loader import load_milk_events, load_reproduction_events
@@ -24,6 +25,7 @@ from services.farm_analysis import build_farm_overview_payload, build_farm_summa
 from services.feed_environment_queries import build_feed_environment_payload
 from services.market_finance_queries import build_market_finance_payload
 from services.metric_registry import build_metric_registry_table
+from services.overview_queries import build_overview_payload
 from services.outcome_analysis import build_outcome_linkage_analysis
 
 
@@ -126,12 +128,83 @@ def main() -> None:
     st.markdown(
         """
 <style>
-[data-testid="stAppViewContainer"] { background: #f6f8fc; }
-[data-testid="stSidebar"] { background: #eef3f9; border-right: 1px solid #d7dfeb; }
-[data-baseweb="tab"] { color: #1f2937 !important; }
-[data-baseweb="tab"][aria-selected="true"] { color: #0f172a !important; font-weight: 700 !important; }
-h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
-[data-testid="stMetricValue"] * { color: #0f172a !important; }
+:root {
+  --teal-bg: #f2fbfa;
+  --teal-panel: #e4f6f3;
+  --teal-border: #5faea2;
+  --teal-accent: #0b5f59;
+  --text-strong: #07141c;
+  --text-muted: #122734;
+}
+[data-testid="stAppViewContainer"] {
+  background: var(--teal-bg) !important;
+  color: var(--text-strong) !important;
+}
+[data-testid="stHeader"] {
+  background: transparent !important;
+}
+[data-testid="stSidebar"] {
+  background: var(--teal-panel) !important;
+  border-right: 1px solid var(--teal-border) !important;
+}
+[data-testid="stSidebarNav"] {
+  display: none !important;
+}
+[data-baseweb="tab-list"] {
+  gap: 0.2rem;
+}
+[data-baseweb="tab"] {
+  color: var(--text-strong) !important;
+  background: #ffffff !important;
+  border: 1px solid var(--teal-border) !important;
+  border-radius: 0.5rem !important;
+}
+[data-baseweb="tab"][aria-selected="true"] {
+  color: #ffffff !important;
+  background: var(--teal-accent) !important;
+  border-color: var(--teal-accent) !important;
+  font-weight: 700 !important;
+}
+h1, h2, h3, h4, h5, h6,
+.stMarkdown p, .stCaption, label, span, div, small {
+  color: var(--text-strong) !important;
+}
+[data-testid="stMetric"] {
+  background: #ffffff;
+  border: 1px solid var(--teal-border);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.75rem;
+}
+[data-testid="stMetricLabel"] *, [data-testid="stMetricValue"] * {
+  color: var(--text-strong) !important;
+}
+[data-testid="stExpander"] details {
+  background: #ffffff;
+  border: 1px solid var(--teal-border);
+  border-radius: 0.55rem;
+}
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--teal-border);
+  border-radius: 0.45rem;
+}
+[data-testid="stDataFrame"] * {
+  color: var(--text-strong) !important;
+}
+[data-testid="stSelectbox"] label, [data-testid="stRadio"] label, [data-testid="stSlider"] label {
+  color: var(--text-strong) !important;
+}
+[data-baseweb="input"] input, [data-baseweb="select"] *, [data-baseweb="textarea"] textarea {
+  color: var(--text-strong) !important;
+  background: #ffffff !important;
+}
+[data-testid="stInfo"], [data-testid="stSuccess"], [data-testid="stWarning"], [data-testid="stError"] {
+  color: var(--text-strong) !important;
+}
+[data-testid="stAppViewContainer"] a {
+  color: #0b5f89 !important;
+}
+.block-container { padding-top: 1.2rem !important; padding-bottom: 1.2rem !important; }
+[data-testid="stVerticalBlock"] > div { gap: 0.55rem !important; }
 </style>
         """,
         unsafe_allow_html=True,
@@ -150,54 +223,37 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
     repro_df = None
     repro_validation = None
 
+    try:
+        platform_service = get_platform_service()
+        source_health = platform_service.data_quality_summary()
+        connector_list = platform_service.registry.list()
+    except Exception as exc:
+        st.warning(f"Canonical store unavailable: {exc}")
+
     with st.sidebar:
-        st.markdown("### Source Mode")
-        source_mode = st.radio(
-            "Primary data source",
-            options=["processed_file", "canonical_store"],
-            format_func=lambda m: "Processed file" if m == "processed_file" else "Canonical store",
-            index=0,
-            key="primary_source_mode",
+        st.markdown("### Navigation")
+        nav_page = st.radio(
+            "Go to",
+            [
+                "Overview",
+                "Farm Overview",
+                "Herd Intelligence",
+                "Feed & Environment",
+                "Market & Finance",
+                "Data Quality",
+            ],
+            key="sidebar_nav_page",
         )
 
-        try:
-            platform_service = get_platform_service()
-            source_health = platform_service.data_quality_summary()
-            connector_list = platform_service.registry.list()
-        except Exception as exc:
-            st.warning(f"Canonical store unavailable: {exc}")
-
-        st.markdown("### Sensor Intake")
-        sensor_file = st.file_uploader("Sensor upload (CSV)", type=["csv"], key="sensor_store_upload")
-        if sensor_file is not None and platform_service is not None and st.button("Ingest sensor upload", key="ingest_sensor_upload_btn"):
-            sensor_upload_result = ingest_sensor_upload(platform_service, sensor_file)
-            if sensor_upload_result.get("status") == "completed":
-                st.success(f"Ingestion completed: {sensor_upload_result.get('rows_stored', 0):,} rows stored")
-            else:
-                st.error(f"Ingestion failed: {sensor_upload_result.get('error_log_json', 'unknown error')}")
-            st.cache_data.clear()
-
-        st.markdown("### Outcome Data Inputs")
-        st.caption("Optional files for outcome-linked evidence.")
-        milk_file = st.file_uploader("Milk records (CSV/XLSX)", type=["csv", "xlsx"], key="milk_uploader")
-        repro_file = st.file_uploader("Reproductive records (CSV/XLSX)", type=["csv", "xlsx"], key="repro_uploader")
-        st.markdown("### Analysis Controls")
-        outcome_window = st.slider("Rolling window (days)", 7, 45, 14, key="global_window")
-        outcome_min_obs = st.slider("Minimum observations", 3, 30, 7, key="global_min_obs")
-
-        if milk_file is not None:
-            try:
-                milk_df, milk_validation = load_milk_events(milk_file, source_label="uploaded_milk")
-                st.success(f"Milk loaded: {len(milk_df):,} rows")
-            except Exception as exc:
-                st.error(f"Milk load failed: {exc}")
-
-        if repro_file is not None:
-            try:
-                repro_df, repro_validation = load_reproduction_events(repro_file, source_label="uploaded_repro")
-                st.success(f"Reproduction loaded: {len(repro_df):,} rows")
-            except Exception as exc:
-                st.error(f"Reproduction load failed: {exc}")
+    header_left, header_mid, header_right = st.columns([2.2, 2.1, 1.2])
+    with header_left:
+        source_mode = st.radio(
+            "Source Mode",
+            options=["processed_file", "canonical_store"],
+            format_func=lambda m: "Processed file" if m == "processed_file" else "Canonical store",
+            horizontal=True,
+            key="primary_source_mode",
+        )
 
     try:
         if source_mode == "canonical_store":
@@ -213,6 +269,63 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
 
     farm_table = build_farm_summary_table(df)
     _ensure_session_selection(df, farm_table)
+
+    farm_ids = farm_table["farm_id"].astype(str).tolist() if not farm_table.empty else []
+    with header_mid:
+        if farm_ids:
+            selected_farm = st.selectbox(
+                "Farm",
+                farm_ids,
+                index=farm_ids.index(st.session_state["selected_farm_id"]) if st.session_state["selected_farm_id"] in farm_ids else 0,
+                key="header_farm_selector",
+            )
+            st.session_state["selected_farm_id"] = selected_farm
+        else:
+            st.selectbox("Farm", ["No farms"], index=0, key="header_farm_selector_disabled", disabled=True)
+    with header_right:
+        latest_run = (source_health or {}).get("latest_run") if source_health else None
+        if latest_run is None:
+            st.markdown("**Data Health**  \n:gray[No runs]")
+            st.caption("Last sync: n/a")
+        else:
+            status = str(latest_run.get("status") or "unknown")
+            badge = ":green[Healthy]" if status == "completed" else ":red[Issue]" if status == "failed" else ":orange[Running]"
+            st.markdown(f"**Data Health**  \n{badge}")
+            st.caption(f"Last sync: {latest_run.get('ended_at') or latest_run.get('started_at')}")
+
+    control_left, control_right = st.columns([1, 1])
+    with control_left:
+        outcome_window = st.slider("Rolling window (days)", 7, 45, 14, key="global_window")
+    with control_right:
+        outcome_min_obs = st.slider("Minimum observations", 3, 30, 7, key="global_min_obs")
+
+    with st.expander("Data Management", expanded=False):
+        st.caption("Ingestion and optional evidence uploads")
+        sensor_file = st.file_uploader("Sensor upload (CSV)", type=["csv"], key="sensor_store_upload")
+        if sensor_file is not None and platform_service is not None and st.button("Ingest sensor upload", key="ingest_sensor_upload_btn"):
+            sensor_upload_result = ingest_sensor_upload(platform_service, sensor_file)
+            if sensor_upload_result.get("status") == "completed":
+                st.success(f"Ingestion completed: {sensor_upload_result.get('rows_stored', 0):,} rows stored")
+            else:
+                st.error(f"Ingestion failed: {sensor_upload_result.get('error_log_json', 'unknown error')}")
+            st.cache_data.clear()
+
+        milk_file = st.file_uploader("Milk records (CSV/XLSX)", type=["csv", "xlsx"], key="milk_uploader")
+        repro_file = st.file_uploader("Reproductive records (CSV/XLSX)", type=["csv", "xlsx"], key="repro_uploader")
+
+        if milk_file is not None:
+            try:
+                milk_df, milk_validation = load_milk_events(milk_file, source_label="uploaded_milk")
+                st.success(f"Milk loaded: {len(milk_df):,} rows")
+            except Exception as exc:
+                st.error(f"Milk load failed: {exc}")
+
+        if repro_file is not None:
+            try:
+                repro_df, repro_validation = load_reproduction_events(repro_file, source_label="uploaded_repro")
+                st.success(f"Reproduction loaded: {len(repro_df):,} rows")
+            except Exception as exc:
+                st.error(f"Reproduction load failed: {exc}")
 
     t_outcome = perf_counter()
     outcome_bundle = cached_outcome_analysis(df, milk_df, repro_df, outcome_window, outcome_min_obs)
@@ -231,9 +344,31 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
         limit=5000,
     )
 
-    tabs = st.tabs(["Farm Overview", "Herd Intelligence", "Feed & Environment", "Market & Finance", "Data Quality"])
+    selected_farm = st.session_state.get("selected_farm_id")
+    overview_farm_profile = None
+    if selected_farm:
+        overview_farm_profile = cached_farm_profile(
+            df,
+            state_frame,
+            selected_farm,
+            outcome_window,
+            outcome_min_obs,
+            "best",
+            outcome_bundle["farm_summary_table"],
+            outcome_bundle["cow_summary_table"],
+        )
+    overview_payload = build_overview_payload(
+        df=df,
+        validation_report=validation_report,
+        selected_farm=selected_farm,
+        farm_profile=overview_farm_profile,
+        source_health=source_health,
+        service=platform_service,
+    )
 
-    with tabs[0]:
+    if nav_page == "Overview":
+        render_overview(overview_payload)
+    elif nav_page == "Farm Overview":
         render_farm_overview(
             df=df,
             state_frame=state_frame,
@@ -241,8 +376,7 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
             cached_farm_profile=cached_farm_profile,
             cached_farm_visual_timeseries=cached_farm_visual_timeseries,
         )
-
-    with tabs[1]:
+    elif nav_page == "Herd Intelligence":
         render_herd_intelligence(
             df=df,
             state_frame=state_frame,
@@ -251,20 +385,17 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
             cached_cow_pool=cached_cow_pool,
             cached_cow_profile=cached_cow_profile,
         )
-
-    with tabs[2]:
+    elif nav_page == "Feed & Environment":
         try:
             render_feed_environment(feed_environment_payload)
         except Exception as exc:
             st.error(f"Feed & Environment failed: {exc}")
-
-    with tabs[3]:
+    elif nav_page == "Market & Finance":
         try:
             render_market_finance(market_finance_payload)
         except Exception as exc:
             st.error(f"Market & Finance failed: {exc}")
-
-    with tabs[4]:
+    elif nav_page == "Data Quality":
         render_data_quality(
             validation_report=validation_report,
             build_data_validation_table=build_data_validation_table,

@@ -22,11 +22,10 @@ def render_farm_overview(
         st.info("No farm segmentation available.")
         return
 
-    selected = st.session_state.get("selected_farm_id")
-    if selected not in farm_ids:
-        selected = farm_ids[0]
-    selected_farm = st.selectbox("Select farm", farm_ids, index=farm_ids.index(selected), key="farm_selector")
-    st.session_state["selected_farm_id"] = selected_farm
+    selected_farm = st.session_state.get("selected_farm_id")
+    if selected_farm not in farm_ids:
+        st.info("Selected farm is unavailable.")
+        return
 
     col1, col2 = st.columns(2)
     with col1:
@@ -57,6 +56,8 @@ def render_farm_overview(
     burden = farm_profile["burden_metrics"]
 
     st.markdown(f"### {header.get('farm_name', header.get('farm_id'))}")
+    st.caption("Farm Snapshot")
+    st.markdown("#### Labeled Metrics")
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Farm Rating", f"{rating['grade']} ({rating['index']:.1f})")
     k2.metric("Action Pressure", f"{pressure['score']:.1f} ({pressure['band']})")
@@ -70,7 +71,6 @@ def render_farm_overview(
     b3.metric("Avg Milk (L)", "n/a" if header.get("avg_milk_yield_l") is None else f"{header['avg_milk_yield_l']:.2f}")
 
     st.markdown("#### Rating Distribution (A-E)")
-    st.dataframe(farm_profile["rating_distribution_summary"], use_container_width=True, hide_index=True)
     dist = farm_profile["rating_distribution_summary"].copy()
     if not dist.empty:
         chart = (
@@ -80,6 +80,7 @@ def render_farm_overview(
             .properties(height=160)
         )
         st.altair_chart(chart, use_container_width=True)
+    st.dataframe(farm_profile["rating_distribution_summary"], use_container_width=True, hide_index=True)
 
     farm_ts = cached_farm_visual_timeseries(state_frame, selected_farm)
     if not farm_ts.empty:
@@ -91,5 +92,5 @@ def render_farm_overview(
         if state_cols:
             st.line_chart(farm_ts.set_index("date")[state_cols], use_container_width=True)
 
-    st.markdown("#### Leaderboard")
+    st.markdown("#### Leaderboard Details")
     st.dataframe(farm_profile["leaderboard"], use_container_width=True, hide_index=True)
