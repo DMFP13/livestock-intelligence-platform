@@ -5,6 +5,17 @@ from datetime import datetime
 from typing import Any, Protocol
 
 
+@dataclass(frozen=True)
+class ConnectorCapabilities:
+    modes: list[str]
+    required_config: list[str] = field(default_factory=list)
+    supported_entity_levels: list[str] = field(default_factory=list)
+    supported_signals: list[str] = field(default_factory=list)
+    supports_polling: bool = False
+    supports_webhook: bool = False
+    supports_manual_upload: bool = True
+
+
 @dataclass
 class ConnectorContext:
     source_system: str
@@ -24,6 +35,7 @@ class ConnectorResult:
 
 class DataConnector(Protocol):
     name: str
+    CAPABILITIES: ConnectorCapabilities
 
     def testConnection(self, context: ConnectorContext) -> tuple[bool, str]: ...
 

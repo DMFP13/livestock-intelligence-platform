@@ -7,16 +7,27 @@ from uuid import uuid4
 from packages.analytics.thi import classify_heat_stress, compute_thi
 from packages.core import QualityFlag
 
-from .base import ConnectorContext
+from .base import ConnectorCapabilities, ConnectorContext
 
 
 class WeatherConnector:
     name = "weather"
+    CAPABILITIES = ConnectorCapabilities(
+        modes=["polling", "webhook", "manual_upload"],
+        required_config=["endpoint_url", "api_key_ref"],
+        supported_entity_levels=["farm", "location"],
+        supported_signals=["temperature_c", "humidity_pct", "thi", "heat_stress_alert"],
+        supports_polling=True,
+        supports_webhook=True,
+        supports_manual_upload=True,
+    )
 
     def testConnection(self, context: ConnectorContext) -> tuple[bool, str]:
-        if context.mode == "uploaded_file":
+        if context.mode in {"uploaded_file", "manual_upload", "webhook"}:
             return True, "ok"
-        if context.mode == "api" and context.config.get("enabled"):
+        if context.mode in {"api", "polling"} and context.config.get("enabled"):
+            if not context.config.get("endpoint_url") or not context.config.get("api_key_ref"):
+                return False, "missing endpoint_url/api_key_ref"
             return True, "configured"
         return False, "weather connector not configured for live mode"
 

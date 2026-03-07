@@ -16,6 +16,8 @@ class IngestionRequest:
     connector_key: str
     source_system: str
     mode: str
+    trigger_type: str = "manual"
+    source_config_id: str | None = None
     config: dict[str, Any] = field(default_factory=dict)
 
 
@@ -27,9 +29,11 @@ class IngestionPipeline:
     def run(self, request: IngestionRequest) -> dict[str, Any]:
         run_id = str(uuid4())
         connector = self.registry.get(request.connector_key)
+        mode = self._normalize_mode(request.mode)
+        self._validate_mode(connector, mode)
         context = ConnectorContext(
             source_system=request.source_system,
-            mode=request.mode,
+            mode=mode,
             config=request.config,
         )
 
@@ -38,7 +42,7 @@ class IngestionPipeline:
                 "id": run_id,
                 "source_system": request.source_system,
                 "connector_name": connector.name,
-                "mode": request.mode,
+                "mode": mode,
                 "status": "running",
                 "started_at": datetime.utcnow().isoformat(),
                 "rows_raw": 0,
@@ -51,7 +55,14 @@ class IngestionPipeline:
                 "missing_values_rate": None,
                 "quality_summary_json": "{}",
                 "error_log_json": "[]",
-                "metadata_json": json.dumps(request.config, default=str),
+                "metadata_json": json.dumps(
+                    {
+                        "config": request.config,
+                        "trigger_type": request.trigger_type,
+                        "source_config_id": request.source_config_id,
+                    },
+                    default=str,
+                ),
             }
         )
 
@@ -62,6 +73,13 @@ class IngestionPipeline:
                 raise RuntimeError(msg)
 
             raw_records = connector.fetchRaw(context)
+            self.store.insert_raw_source_records(
+                ingestion_run_id=run_id,
+                connector_name=connector.name,
+                source_system=request.source_system,
+                mode=mode,
+                rows=raw_records,
+            )
             valid_records, validation_errors = connector.validate(raw_records, context)
             normalized = connector.normalize(valid_records, context)
             rows_stored = connector.upsert(normalized, context, self.store, run_id)
@@ -103,6 +121,23 @@ class IngestionPipeline:
                 },
             )
             return self.store.fetch_run(run_id) or {"id": run_id, "status": "failed", "error": str(exc)}
+
+    @staticmethod
+    def _normalize_mode(mode: str) -> str:
+        if mode == "uploaded_file":
+            return "manual_upload"
+        if mode == "api":
+            return "polling"
+        return mode
+
+    @staticmethod
+    def _validate_mode(connector: Any, mode: str) -> None:
+        caps = getattr(connector, "CAPABILITIES", None)
+        if caps is None:
+            return
+        modes = list(getattr(caps, "modes", []))
+        if modes and mode not in modes:
+            raise ValueError(f"connector {getattr(connector, 'name', '<unknown>')} does not support mode '{mode}'")
 
     @staticmethod
     def _estimate_missing_rate(rows: list[dict[str, Any]]) -> float | None:

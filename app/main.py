@@ -214,6 +214,7 @@ h1, h2, h3, h4, h5, h6,
 
     platform_service = None
     source_health = None
+    live_source_health = None
     connector_list: list[str] = []
     source_mode = "processed_file"
     sensor_upload_result = None
@@ -226,6 +227,11 @@ h1, h2, h3, h4, h5, h6,
     try:
         platform_service = get_platform_service()
         source_health = platform_service.data_quality_summary()
+        source_health_fn = getattr(platform_service, "source_health_summary", None)
+        if callable(source_health_fn):
+            live_source_health = source_health_fn()
+        else:
+            live_source_health = None
         connector_list = platform_service.registry.list()
     except Exception as exc:
         st.warning(f"Canonical store unavailable: {exc}")
@@ -405,6 +411,8 @@ h1, h2, h3, h4, h5, h6,
             source_health=source_health,
             connector_list=connector_list,
             sensor_upload_result=sensor_upload_result,
+            platform_service=platform_service,
+            live_source_health=live_source_health,
         )
 
 

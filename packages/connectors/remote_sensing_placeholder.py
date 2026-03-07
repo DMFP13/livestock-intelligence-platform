@@ -6,7 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from packages.core import QualityFlag
-from .base import ConnectorContext
+from .base import ConnectorCapabilities, ConnectorContext
 
 
 REMOTE_METRIC_MAP = {
@@ -26,10 +26,25 @@ class RemoteSensingScaffoldConnector:
     """
 
     name = "remote_sensing_scaffold"
+    CAPABILITIES = ConnectorCapabilities(
+        modes=["polling", "webhook", "manual_upload"],
+        required_config=["endpoint_url", "api_key_ref"],
+        supported_entity_levels=["farm", "location", "paddock"],
+        supported_signals=list(REMOTE_METRIC_MAP.keys()),
+        supports_polling=True,
+        supports_webhook=True,
+        supports_manual_upload=True,
+    )
 
     def testConnection(self, context: ConnectorContext) -> tuple[bool, str]:
-        if context.mode == "uploaded_file":
+        if context.mode in {"uploaded_file", "manual_upload", "webhook"}:
             return True, "scaffold ready for provided rows"
+        if context.mode == "polling":
+            if not context.config.get("enabled"):
+                return False, "connector inactive"
+            if not context.config.get("endpoint_url") or not context.config.get("api_key_ref"):
+                return False, "missing endpoint_url/api_key_ref"
+            return True, "configured"
         return False, "remote sensing live integration is not configured; scaffold supports uploaded/scaffolded rows only"
 
     def fetchRaw(self, context: ConnectorContext) -> list[dict[str, Any]]:

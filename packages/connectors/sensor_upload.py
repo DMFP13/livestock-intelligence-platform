@@ -9,7 +9,7 @@ from uuid import uuid4
 from packages.core import QualityFlag
 from packages.core.entity_resolution import EntityResolver
 
-from .base import ConnectorContext
+from .base import ConnectorCapabilities, ConnectorContext
 
 
 RAW_TO_CANONICAL = {
@@ -25,6 +25,15 @@ RAW_TO_CANONICAL = {
 
 class SensorUploadConnector:
     name = "sensor_upload"
+    CAPABILITIES = ConnectorCapabilities(
+        modes=["manual_upload"],
+        required_config=["file_path"],
+        supported_entity_levels=["animal", "herd", "farm"],
+        supported_signals=["rumination_min", "activity_rate", "data_collection_rate_pct", "mounting_detected"],
+        supports_polling=False,
+        supports_webhook=False,
+        supports_manual_upload=True,
+    )
 
     def __init__(self, resolver: EntityResolver | None = None):
         self.resolver = resolver or EntityResolver([])
