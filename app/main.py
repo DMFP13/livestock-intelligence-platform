@@ -18,10 +18,11 @@ from app.pages.feed_environment import render_feed_environment
 from app.pages.herd_intelligence import render_herd_intelligence
 from app.pages.market_finance import render_market_finance
 from services.cow_analysis import build_cow_profile_payload, list_cows
-from services.canonical_queries import build_market_finance_summary, query_reference_series
 from services.data_loader import build_data_validation_table, load_canonical_data_cached
 from services.event_loader import load_milk_events, load_reproduction_events
 from services.farm_analysis import build_farm_overview_payload, build_farm_summary_table
+from services.feed_environment_queries import build_feed_environment_payload
+from services.market_finance_queries import build_market_finance_payload
 from services.metric_registry import build_metric_registry_table
 from services.outcome_analysis import build_outcome_linkage_analysis
 
@@ -218,8 +219,13 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
     print(f"[timing] outcome_bundle_cache_call elapsed_s={perf_counter() - t_outcome:.4f}")
     state_frame = outcome_bundle.get("state_frame", pd.DataFrame())
 
-    reference_df = query_reference_series(platform_service, limit=5000) if platform_service is not None else pd.DataFrame()
-    market_summary_df = build_market_finance_summary(reference_df)
+    feed_environment_payload = build_feed_environment_payload(df)
+    market_finance_payload = build_market_finance_payload(
+        source_mode=source_mode,
+        service=platform_service,
+        processed_df=df,
+        limit=5000,
+    )
 
     tabs = st.tabs(["Farm Overview", "Herd Intelligence", "Feed & Environment", "Market & Finance", "Data Quality"])
 
@@ -243,10 +249,16 @@ h1, h2, h3, .stMarkdown p, .stCaption { color: #0f172a !important; }
         )
 
     with tabs[2]:
-        render_feed_environment(df)
+        try:
+            render_feed_environment(feed_environment_payload)
+        except Exception as exc:
+            st.error(f"Feed & Environment failed: {exc}")
 
     with tabs[3]:
-        render_market_finance(reference_df, market_summary_df)
+        try:
+            render_market_finance(market_finance_payload)
+        except Exception as exc:
+            st.error(f"Market & Finance failed: {exc}")
 
     with tabs[4]:
         render_data_quality(

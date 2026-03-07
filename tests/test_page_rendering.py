@@ -11,9 +11,9 @@ from app.pages.market_finance import render_market_finance
 
 class TestPageRendering(unittest.TestCase):
     def test_render_functions_accept_empty_inputs(self) -> None:
-        # Feasibility check: ensure thin page components can be invoked with empty datasets.
-        render_feed_environment(pd.DataFrame())
-        render_market_finance(pd.DataFrame(), pd.DataFrame())
+        # Feasibility check: ensure thin page components can be invoked with empty/error payloads.
+        render_feed_environment({"status": "empty", "message": "no data"})
+        render_market_finance({"status": "empty", "message": "no series"})
         render_data_quality(
             validation_report={
                 "missingness": pd.DataFrame(),

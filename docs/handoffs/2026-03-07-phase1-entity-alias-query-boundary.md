@@ -76,3 +76,32 @@ Result: 9 tests passed.
 - Add filterable canonical query service methods (farm/herd/date range/source).
 - Reduce duplicated pandas transforms between legacy `services/*` and canonical query layer.
 - Add richer entity alias management hooks in UI (manual mapping/edit confidence).
+
+---
+
+## Phase 2 Progress Update (Market + Feed/Environment)
+
+### Completed in this follow-on chunk
+- Centralized Feed & Environment data shaping into `services/feed_environment_queries.py`.
+- Centralized Market & Finance querying/summaries into `services/market_finance_queries.py`.
+- Updated pages to be payload-driven/presentation-only:
+  - `app/pages/feed_environment.py`
+  - `app/pages/market_finance.py`
+- Added processed-file fallback behavior:
+  - Market page can derive local fallback series from processed datasets when canonical reference series are absent.
+  - Feed page continues to work from processed-file canonical dataframe and computes derived THI when temp/humidity are available.
+- Added manual smoke-test runbook:
+  - `docs/runbooks/phase2-smoke-test.md`
+- Added tests:
+  - `tests/test_feed_environment_queries.py`
+  - `tests/test_market_finance_queries.py`
+  - updated `tests/test_page_rendering.py`
+
+### Test Status
+- `.venv/bin/python -m unittest discover -s tests -t . -v` passed (14 tests).
+
+### Remaining Phase 2 Integration Gaps
+- No live external prices/weather polling configured yet (connectors remain scaffolded/config-driven by design).
+- Market fallback currently supports only local columns if present (`beef_price`, `dairy_price`, `feed_price`, `fx_rate`, `cost_index`).
+- Feed/environment alerting beyond THI summary is not yet wired to an alert engine module.
+- UI still uses in-process service access (not remote API calls) for app runtime simplicity.

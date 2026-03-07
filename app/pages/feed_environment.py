@@ -1,37 +1,37 @@
 from __future__ import annotations
 
-import pandas as pd
 import streamlit as st
 
 
-def render_feed_environment(df: pd.DataFrame) -> None:
+def render_feed_environment(payload: dict) -> None:
     st.subheader("Feed & Environment")
 
-    if df.empty:
-        st.info("No data available.")
+    status = payload.get("status")
+    if status != "ok":
+        st.info(payload.get("message", "Feed/environment view unavailable."))
         return
 
-    if "date" not in df.columns:
-        st.info("No timestamped feed/environment data available.")
+    ts = payload.get("timeseries")
+    current_metrics = payload.get("current_metrics", [])
+    derived = payload.get("derived", {})
+
+    if ts is None or ts.empty:
+        st.info("No feed/environment timeseries available.")
         return
 
-    source = df.dropna(subset=["date"]).copy()
-    if source.empty:
-        st.info("No timestamped feed/environment data available.")
-        return
+    current_cols = st.columns(min(4, max(1, len(current_metrics))))
+    for i, row in enumerate(current_metrics):
+        label = row.get("metric", f"metric_{i}")
+        val = row.get("value")
+        delta = row.get("delta")
+        current_cols[i % len(current_cols)].metric(label, "n/a" if val is None else f"{float(val):.2f}", None if delta is None else f"{delta:+.2f}")
 
-    source["date_day"] = source["date"].dt.floor("D")
-    agg = {m: "mean" for m in ["rumination_min", "eating_min", "activity_rate", "temperature_c", "humidity_pct", "thi"] if m in source.columns}
-    if not agg:
-        st.info("No feed/environment metrics found in canonical records.")
-        return
-
-    ts = source.groupby("date_day", as_index=False).agg(agg).rename(columns={"date_day": "date"})
-
-    current_cols = st.columns(min(4, max(1, len(agg))))
-    for i, metric in enumerate(agg.keys()):
-        val = ts[metric].iloc[-1] if not ts.empty else None
-        current_cols[i % len(current_cols)].metric(metric, "n/a" if pd.isna(val) else f"{float(val):.2f}")
+    st.markdown("#### Environment Summary")
+    d1, d2, d3 = st.columns(3)
+    d1.metric("Days in View", f"{int(derived.get('days', 0))}")
+    heat_days = derived.get("heat_stress_days")
+    d2.metric("Heat-Stress Days (THI>=72)", "n/a" if heat_days is None else f"{int(heat_days)}")
+    d3.metric("Has Environment Signals", "yes" if derived.get("has_environment_signals") else "no")
 
     st.markdown("#### Recent Trend")
     st.line_chart(ts.set_index("date"), use_container_width=True)
