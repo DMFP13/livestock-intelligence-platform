@@ -1,0 +1,27 @@
+{
+  "scenario": {
+    "exchangeRate": 1387.4475,
+    "tariffPct": 15,
+    "shippingPct": 8,
+    "globalMilkPriceUsdMt": 3654,
+    "feedCost": 450,
+    "labourCost": 60,
+    "milkYieldPerCow": 8,
+    "herdSize": 20,
+    "vetCost": 25,
+    "overheadCost": 40,
+    "retailPrice": 2645.5,
+    "baselineImportParity": 787.08,
+    "litresPerKg": 8
+  },
+  "metrics": {
+    "importParity": 787.07607386625,
+    "costPerLitre": 575,
+    "marginVsImports": 212.07607386625,
+    "marginVsRetail": 2070.5,
+    "profitPerCow": 16564,
+    "profitPerHerd": 331280,
+    "breakEvenYield": 0.2777106978990582
+  },
+  "exported_at": "2026-03-09T18:01:47.363Z"
+}

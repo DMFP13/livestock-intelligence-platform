@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+  <title>Livestock Intelligence Platform</title>
+  <script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; color: #1f2937; }
+    header { background: #0f766e; color: white; padding: 20px 28px; }
+    h1 { margin: 0; font-size: 24px; }
+    .subtitle { opacity: 0.9; margin-top: 6px; }
+    .container { padding: 20px 28px 40px; }
+    .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 16px 0 22px; }
+    .tab { background: white; padding: 12px; border-radius: 10px; border: 1px solid #d1d5db; font-weight: 700; text-align: center; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+    .card h3 { margin: 0 0 10px; font-size: 14px; color: #4b5563; }
+    .value { font-size: 26px; font-weight: 700; }
+    .section { margin-top: 20px; }
+    .section h2 { margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 13px; }
+    th { background: #ecfeff; }
+    .two-col { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+    .note { color: #6b7280; font-size: 13px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Livestock Intelligence Platform</h1>
+  <div class='subtitle'>Market economics retained. Herd telemetry architecture prepared for staged precision livestock integration.</div>
+</header>
+<div class='container'>
+  <div class='tabs'>
+    <div class='tab'>Market Intelligence</div>
+    <div class='tab'>Domestic Production Economics</div>
+    <div class='tab'>Herd Overview</div>
+    <div class='tab'>Individual Animal Monitoring</div>
+    <div class='tab'>Sensor Health / Device Status</div>
+  </div>
+
+  <div class='grid'>
+    <div class='card'><h3>Import Parity</h3><div class='value'>₦787.08/L</div></div>
+    <div class='card'><h3>Domestic Cost Midpoint</h3><div class='value'>₦575.00/L</div></div>
+    <div class='card'><h3>Retail Equivalent</h3><div class='value'>₦2645.50/L</div></div>
+    <div class='card'><h3>NFEM Weighted Avg</h3><div class='value'>₦1387.45/$</div></div>
+  </div>
+
+  <div class='two-col'>
+    <div class='card'>
+      <h2>Market Intelligence</h2>
+      <canvas id='importParityChart' height='120'></canvas>
+      <div class='note'>Existing dairy economics remain active while the application transitions to a broader livestock intelligence structure.</div>
+    </div>
+    <div class='card'>
+      <h2>Roadmap Placeholder</h2>
+      <p>This panel is reserved for future scenario presets, cohort filters, THI overlays, and farm-level cost slices.</p>
+      <ul>
+        <li>TODO: wire scenario presets into config-driven assumptions</li>
+        <li>TODO: add herd filters by farm, cohort, treatment group</li>
+        <li>TODO: attach real telemetry API / file-drop adapters</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class='section'>
+    <h2>Herd Overview</h2>
+    <table>
+      <thead><tr><th>Farm</th><th>Animal</th><th>Date</th><th>Activity Mean</th><th>Rumination Mean</th><th>Temperature Mean</th><th>Estrus Events</th><th>Alerts</th></tr></thead>
+      <tbody id='herdTable'></tbody>
+    </table>
+    <div class='note'>Prototype telemetry summary generated from mock ingestion and feature engineering modules.</div>
+  </div>
+
+  <div class='section'>
+    <h2>Sensor Health / Device Status</h2>
+    <table>
+      <thead><tr><th>Farm</th><th>Animal</th><th>Device</th><th>Latest Battery</th><th>Latest Signal</th><th>Health Alert</th></tr></thead>
+      <tbody id='deviceTable'></tbody>
+    </table>
+  </div>
+
+  <div class='section'>
+    <h2>Fetch Log</h2>
+    <table>
+      <thead><tr><th>Source</th><th>Status</th><th>Duration (s)</th><th>Fetched At</th><th>Error</th></tr></thead>
+      <tbody id='fetchTable'></tbody>
+    </table>
+  </div>
+</div>
+<script>
+  const importParitySeries = [{"date": "2023-03", "dairy_fpi": 135.3, "usdngn_rate": 458.78, "import_parity_ngn_per_litre": 289.1}, {"date": "2023-04", "dairy_fpi": 129.3, "usdngn_rate": 460.8, "import_parity_ngn_per_litre": 277.5}, {"date": "2023-05", "dairy_fpi": 121.7, "usdngn_rate": 460.02, "import_parity_ngn_per_litre": 260.75}, {"date": "2023-06", "dairy_fpi": 119.9, "usdngn_rate": 602.12, "import_parity_ngn_per_litre": 336.24}, {"date": "2023-07", "dairy_fpi": 119.1, "usdngn_rate": 779.31, "import_parity_ngn_per_litre": 432.29}, {"date": "2023-08", "dairy_fpi": 114.3, "usdngn_rate": 765.33, "import_parity_ngn_per_litre": 407.43}, {"date": "2023-09", "dairy_fpi": 112.0, "usdngn_rate": 771.47, "import_parity_ngn_per_litre": 402.43}, {"date": "2023-10", "dairy_fpi": 114.6, "usdngn_rate": 778.78, "import_parity_ngn_per_litre": 415.67}, {"date": "2023-11", "dairy_fpi": 116.5, "usdngn_rate": 808.39, "import_parity_ngn_per_litre": 438.63}, {"date": "2023-12", "dairy_fpi": 118.7, "usdngn_rate": 824.69, "import_parity_ngn_per_litre": 455.93}, {"date": "2024-01", "dairy_fpi": 118.7, "usdngn_rate": 906.69, "import_parity_ngn_per_litre": 501.26}, {"date": "2024-02", "dairy_fpi": 120.7, "usdngn_rate": 1471.25, "import_parity_ngn_per_litre": 827.08}, {"date": "2024-03", "dairy_fpi": 124.0, "usdngn_rate": 1527.72, "import_parity_ngn_per_litre": 882.3}, {"date": "2024-04", "dairy_fpi": 123.8, "usdngn_rate": 1241.16, "import_parity_ngn_per_litre": 715.65}, {"date": "2024-05", "dairy_fpi": 126.3, "usdngn_rate": 1434.46, "import_parity_ngn_per_litre": 843.81}, {"date": "2024-06", "dairy_fpi": 127.9, "usdngn_rate": 1502.46, "import_parity_ngn_per_litre": 895.01}, {"date": "2024-07", "dairy_fpi": 127.8, "usdngn_rate": 1577.51, "import_parity_ngn_per_litre": 938.98}, {"date": "2024-08", "dairy_fpi": 131.3, "usdngn_rate": 1596.54, "import_parity_ngn_per_litre": 976.33}, {"date": "2024-09", "dairy_fpi": 136.5, "usdngn_rate": 1629.19, "import_parity_ngn_per_litre": 1035.76}, {"date": "2024-10", "dairy_fpi": 138.6, "usdngn_rate": 1641.42, "import_parity_ngn_per_litre": 1059.59}, {"date": "2024-11", "dairy_fpi": 139.8, "usdngn_rate": 1673.83, "import_parity_ngn_per_litre": 1089.86}, {"date": "2024-12", "dairy_fpi": 141.2, "usdngn_rate": 1574.69, "import_parity_ngn_per_litre": 1035.58}, {"date": "2025-01", "dairy_fpi": 143.1, "usdngn_rate": 1549.48, "import_parity_ngn_per_litre": 1032.71}, {"date": "2025-02", "dairy_fpi": 147.7, "usdngn_rate": 1501.25, "import_parity_ngn_per_litre": 1032.73}, {"date": "2025-03", "dairy_fpi": 148.7, "usdngn_rate": 1527.42, "import_parity_ngn_per_litre": 1057.85}, {"date": "2025-04", "dairy_fpi": 151.7, "usdngn_rate": 1580.85, "import_parity_ngn_per_litre": 1116.94}, {"date": "2025-05", "dairy_fpi": 153.6, "usdngn_rate": 1598.64, "import_parity_ngn_per_litre": 1143.65}, {"date": "2025-06", "dairy_fpi": 155.5, "usdngn_rate": 1554.22, "import_parity_ngn_per_litre": 1125.63}, {"date": "2025-07", "dairy_fpi": 154.6, "usdngn_rate": 1530.57, "import_parity_ngn_per_litre": 1102.09}, {"date": "2025-08", "dairy_fpi": 152.2, "usdngn_rate": 1530.88, "import_parity_ngn_per_litre": 1085.2}, {"date": "2025-09", "dairy_fpi": 147.2, "usdngn_rate": 1505.21, "import_parity_ngn_per_litre": 1031.95}, {"date": "2025-10", "dairy_fpi": 141.7, "usdngn_rate": 1465.6, "import_parity_ngn_per_litre": 967.25}, {"date": "2025-11", "dairy_fpi": 136.2, "usdngn_rate": 1444.07, "import_parity_ngn_per_litre": 916.05}, {"date": "2025-12", "dairy_fpi": 128.2, "usdngn_rate": 1452.0, "import_parity_ngn_per_litre": 866.98}, {"date": "2026-01", "dairy_fpi": 121.8, "usdngn_rate": 1419.91, "import_parity_ngn_per_litre": 805.49}];
+  const herdRecords = [{"farm_id": "Farm_NG_01", "animal_id": "A001", "date": "2026-03-04", "activity_mean": 60.666666666666664, "rumination_mean": 413.3333333333333, "temperature_mean": 38.699999999999996, "estrus_events": 1, "anomaly_events": 0, "health_or_sensor_alerts": 1, "latest_battery": 85, "latest_signal": 0.91}, {"farm_id": "Farm_NG_01", "animal_id": "A002", "date": "2026-03-04", "activity_mean": 30.0, "rumination_mean": 491.6666666666667, "temperature_mean": 39.699999999999996, "estrus_events": 0, "anomaly_events": 0, "health_or_sensor_alerts": 3, "latest_battery": 16, "latest_signal": 0.54}, {"farm_id": "Farm_NG_02", "animal_id": "A003", "date": "2026-03-04", "activity_mean": 71.0, "rumination_mean": 395.6666666666667, "temperature_mean": 38.666666666666664, "estrus_events": 1, "anomaly_events": 0, "health_or_sensor_alerts": 1, "latest_battery": 69, "latest_signal": 0.84}, {"farm_id": "Farm_NG_02", "animal_id": "A004", "date": "2026-03-04", "activity_mean": 45.333333333333336, "rumination_mean": 457.5, "temperature_mean": 38.56666666666667, "estrus_events": 0, "anomaly_events": 0, "health_or_sensor_alerts": 3, "latest_battery": 50, "latest_signal": 0.45}];
+  const deviceRecords = [{"farm_id": "Farm_NG_01", "animal_id": "A001", "source_device_id": "DVC001", "battery_level": 85, "signal_quality": 0.91, "health_alert": "none"}, {"farm_id": "Farm_NG_01", "animal_id": "A002", "source_device_id": "DVC002", "battery_level": 16, "signal_quality": 0.54, "health_alert": "temperature_alert"}, {"farm_id": "Farm_NG_02", "animal_id": "A003", "source_device_id": "DVC003", "battery_level": 69, "signal_quality": 0.84, "health_alert": "none"}, {"farm_id": "Farm_NG_02", "animal_id": "A004", "source_device_id": "DVC004", "battery_level": 50, "signal_quality": 0.45, "health_alert": "none"}];
+  const fetchLog = [{"source": "fao_dairy_price_index", "status": "ok", "duration_s": 0.19, "fetched_at": "2026-03-06T07:00:10.501807+00:00", "error": null}, {"source": "owid/nigeria_production", "status": "ok", "duration_s": 1.03, "fetched_at": "2026-03-06T07:00:10.688813+00:00", "error": null}, {"source": "comtrade/nigeria_dairy_imports", "status": "ok", "duration_s": 3.45, "fetched_at": "2026-03-06T07:00:11.718514+00:00", "error": null}, {"source": "nbs/retail_milk_prices", "status": "ok", "duration_s": 115.87, "fetched_at": "2026-03-06T07:00:15.173582+00:00", "error": null}, {"source": "forex/usdngn_monthly", "status": "ok", "duration_s": 0.48, "fetched_at": "2026-03-06T07:02:11.044818+00:00", "error": null}, {"source": "futures/yahoo_finance", "status": "ok", "duration_s": 0.54, "fetched_at": "2026-03-06T07:02:11.528666+00:00", "error": null}, {"source": "exchange_rate/cbn_nfem", "status": "ok", "duration_s": 3.19, "fetched_at": "2026-03-06T07:02:12.070835+00:00", "error": null}];
+
+  new Chart(document.getElementById('importParityChart'), {
+    type: 'line',
+    data: {
+      labels: importParitySeries.map(r => r.date),
+      datasets: [{
+        label: 'Import parity (₦/L)',
+        data: importParitySeries.map(r => r.import_parity_ngn_per_litre),
+        borderColor: '#0f766e',
+        tension: 0.25
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+
+  function fillTable(targetId, rows, columns) {
+    const tbody = document.getElementById(targetId);
+    tbody.innerHTML = rows.map(row => '<tr>' + columns.map(c => `<td>${row[c] ?? ''}</td>`).join('') + '</tr>').join('');
+  }
+
+  fillTable('herdTable', herdRecords, ['farm_id','animal_id','date','activity_mean','rumination_mean','temperature_mean','estrus_events','health_or_sensor_alerts']);
+  fillTable('deviceTable', deviceRecords, ['farm_id','animal_id','source_device_id','battery_level','signal_quality','health_alert']);
+  fillTable('fetchTable', fetchLog, ['source','status','duration_s','fetched_at','error']);
+</script>
+</body>
+</html>
