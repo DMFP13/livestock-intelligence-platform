@@ -392,6 +392,75 @@ async def upload_milk(farm_id: str, file: UploadFile = File(...)):
 
 
 # ---------------------------------------------------------------------------
+# Farm management
+# ---------------------------------------------------------------------------
+
+@app.post("/api/farms/add")
+def add_farm(
+    name:     str = Form(...),
+    location: str = Form(""),
+    region:   str = Form("West Africa"),
+    species:  str = Form("Dairy cattle"),
+    system:   str = Form("BODIT"),
+    contact:  str = Form(""),
+    notes:    str = Form(""),
+):
+    """Register a new farm, create its storage directory, update registry and index."""
+    reg = json.loads(REGISTRY_FILE.read_text())
+
+    # Auto-generate next farm_id
+    existing_ids = [f["farm_id"] for f in reg["farms"]]
+    nums = [int(fid.split("_")[1]) for fid in existing_ids if fid.startswith("farm_") and fid.split("_")[1].isdigit()]
+    next_num = max(nums, default=0) + 1
+    farm_id = f"farm_{next_num:03d}"
+
+    new_farm = {
+        "farm_id": farm_id,
+        "name": name.strip(),
+        "location": location.strip(),
+        "region": region.strip(),
+        "species": species.strip(),
+        "system": system.strip(),
+        "contact": contact.strip(),
+        "notes": notes.strip(),
+        "active": True,
+        "raw_data": {"type": "manual_upload"},
+    }
+
+    # Create storage directory
+    farm_dir = FARMS_DIR / farm_id
+    farm_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write empty herd_data.json so the farm is immediately queryable
+    empty_herd = {
+        "farm_id": farm_id,
+        "summary": {"animals": 0, "records": 0, "date_range": [], "variables_available": 0},
+        "comparison": {}, "validation": {}, "daily_averages": [],
+        "records_per_animal": [], "missingness": [], "coverage": [],
+        "estrus_alerts": [], "health_alerts": [],
+    }
+    (farm_dir / "herd_data.json").write_text(json.dumps(empty_herd))
+
+    # Update registry
+    reg["farms"].append(new_farm)
+    REGISTRY_FILE.write_text(json.dumps(reg, indent=2))
+
+    # Rebuild farms_index.json
+    index_file = FARMS_DIR / "farms_index.json"
+    if index_file.exists():
+        idx = json.loads(index_file.read_text())
+        idx["farms"].append({
+            "farm_id": farm_id, "name": name.strip(), "location": location.strip(),
+            "region": region.strip(), "animals": 0, "records": 0,
+            "date_range": [], "avg_activity_rate": None, "avg_rumination_min": None,
+            "health_alert_count": 0, "estrus_alert_count": 0, "data_quality_pct": None,
+        })
+        index_file.write_text(json.dumps(idx, indent=2))
+
+    return JSONResponse({"status": "created", "farm_id": farm_id, "farm": new_farm})
+
+
+# ---------------------------------------------------------------------------
 # Legacy endpoints (farm_001 passthrough — keeps existing dashboard working)
 # ---------------------------------------------------------------------------
 

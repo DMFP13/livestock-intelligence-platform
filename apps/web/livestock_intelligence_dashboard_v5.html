@@ -451,6 +451,52 @@
 
         </div>
 
+        <!-- Add a farm -->
+        <section class='panel' style='margin-bottom:16px'>
+          <div class='panel-header'><div><h3>Add a farm</h3><p>Register a new farm so you can upload telemetry and milk data to it.</p></div></div>
+          <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px'>
+            <label class='control-row' style='margin:0'>
+              <div class='control-label'>Farm name <span style='color:#ef4444'>*</span></div>
+              <div class='input-wrap'><input id='newFarmName' type='text' placeholder='e.g. Sunridge Dairy' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+            </label>
+            <label class='control-row' style='margin:0'>
+              <div class='control-label'>Location</div>
+              <div class='input-wrap'><input id='newFarmLocation' type='text' placeholder='e.g. Plateau State, Nigeria' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+            </label>
+            <label class='control-row' style='margin:0'>
+              <div class='control-label'>Region</div>
+              <div class='input-wrap'><input id='newFarmRegion' type='text' value='West Africa' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+            </label>
+            <label class='control-row' style='margin:0'>
+              <div class='control-label'>Species</div>
+              <div class='input-wrap'><input id='newFarmSpecies' type='text' value='Dairy cattle' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+            </label>
+            <label class='control-row' style='margin:0'>
+              <div class='control-label'>Sensor system</div>
+              <div class='input-wrap'>
+                <select id='newFarmSystem' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'>
+                  <option value='BODIT'>BODIT</option>
+                  <option value='SCR'>SCR</option>
+                  <option value='Allflex'>Allflex</option>
+                  <option value='Nedap'>Nedap</option>
+                  <option value='Manual'>Manual records</option>
+                  <option value='Other'>Other</option>
+                </select>
+              </div>
+            </label>
+            <label class='control-row' style='margin:0'>
+              <div class='control-label'>Contact</div>
+              <div class='input-wrap'><input id='newFarmContact' type='text' placeholder='Farm manager name / email' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+            </label>
+          </div>
+          <label class='control-row' style='margin-bottom:12px'>
+            <div class='control-label'>Notes</div>
+            <div class='input-wrap'><input id='newFarmNotes' type='text' placeholder='Optional — breed, management system, study context…' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+          </label>
+          <button class='action-btn' onclick='submitAddFarm()' style='min-width:180px'>Register farm</button>
+          <div id='addFarmResult' style='margin-top:12px;display:none'></div>
+        </section>
+
         <!-- Upload history / guidance -->
         <section class='panel'>
           <div class='panel-header'><div><h3>Format guide</h3><p>Expected file formats for each upload type.</p></div></div>
@@ -1170,6 +1216,50 @@
     document.getElementById(`${type}FileName`).textContent = file.name;
     zone.style.borderColor = 'var(--good)';
     zone.style.background = 'rgba(23,178,106,0.05)';
+  }
+
+  async function submitAddFarm() {
+    const name = document.getElementById('newFarmName').value.trim();
+    if (!name) { alert('Farm name is required.'); return; }
+
+    const resultEl = document.getElementById('addFarmResult');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div style='padding:12px;background:#f0f9ff;border-radius:10px;color:var(--primary);font-weight:700'>Registering farm…</div>`;
+
+    const body = new FormData();
+    body.append('name',     name);
+    body.append('location', document.getElementById('newFarmLocation').value.trim());
+    body.append('region',   document.getElementById('newFarmRegion').value.trim());
+    body.append('species',  document.getElementById('newFarmSpecies').value.trim());
+    body.append('system',   document.getElementById('newFarmSystem').value);
+    body.append('contact',  document.getElementById('newFarmContact').value.trim());
+    body.append('notes',    document.getElementById('newFarmNotes').value.trim());
+
+    try {
+      const res  = await fetch('/api/farms/add', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+      resultEl.innerHTML = `<div style='padding:12px;background:#eef7f2;border:1px solid #d1fadf;border-radius:10px;color:#0d7a47;font-weight:700'>
+        ✓ Farm registered — <code>${data.farm_id}</code><br>
+        <span style='font-weight:400;font-size:13px'>${data.farm.name} · ${data.farm.location || 'no location set'} · ${data.farm.system}</span>
+      </div>`;
+
+      // Clear form
+      ['newFarmName','newFarmLocation','newFarmContact','newFarmNotes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('newFarmRegion').value  = 'West Africa';
+      document.getElementById('newFarmSpecies').value = 'Dairy cattle';
+
+      // Reload farms index so new farm appears in selectors and cards
+      await loadFarmsIndex();
+      populateFarmSelector();
+      populateUploadSelectors();
+      renderFarmCards();
+      renderCompareCharts();
+
+    } catch (e) {
+      resultEl.innerHTML = `<div style='padding:12px;background:#fff0f0;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-weight:700'>✗ Failed to register farm<br><span style='font-weight:400;font-size:13px'>${e.message}</span></div>`;
+    }
   }
 
   async function submitUpload(type) {
