@@ -1019,8 +1019,18 @@
     mkBar('compareQualityChart',    farms.map(f => f.data_quality_pct),    null, '%');
   }
 
-  function openFarmHerd(farmId) {
-    // Switch to Farm Overview tab and scroll to Herd Intelligence
+  async function openFarmHerd(farmId) {
+    // Update the farm selector to match the clicked card
+    const sel = document.getElementById('farmSelector');
+    if (sel) sel.value = farmId;
+    activeFarmId = farmId;
+    const farm = farmsIndex?.farms?.find(f => f.farm_id === farmId);
+    if (farm) updateFarmMeta(farm);
+
+    // Load data for the selected farm
+    await switchFarm(farmId);
+
+    // Switch to Farm Overview tab
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
     const tab  = document.querySelector('[data-tab="farm-overview"]');
