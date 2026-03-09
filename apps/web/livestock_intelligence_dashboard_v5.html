@@ -81,6 +81,17 @@
     @media (max-width: 1400px) { .kpi-grid, .placeholder-grid, .scenario-summary-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 1100px) { .workspace { grid-template-columns:1fr; } .grid-two { grid-template-columns:1fr; } .topbar { grid-template-columns:1fr; height:auto; padding:16px; } .topbar-center { justify-content:flex-start; } .topbar-right { flex-wrap:wrap; } }
     @media (max-width: 700px) { .kpi-grid, .placeholder-grid, .scenario-summary-grid { grid-template-columns:1fr; } .main-content { padding:16px; } }
+@media print {
+  .topbar, .sidebar, #reportBuilder, .nav-tab, .topbar-right, .topbar-center { display:none !important; }
+  .workspace { grid-template-columns:1fr !important; }
+  .content-view { display:none !important; }
+  #reports { display:block !important; }
+  #reportOutput { display:block !important; }
+  body { background:#fff !important; }
+  .panel, .kpi-card { box-shadow:none !important; border:1px solid #ddd !important; break-inside:avoid; }
+  .chart-wrap canvas { max-height:260px !important; }
+  #printReportBtn, #exportCsvBtn { display:none !important; }
+}
   </style>
 </head>
 <body>
@@ -93,7 +104,7 @@
         <div class='platform-title'>Livestock Intelligence Platform</div>
       </div>
       <nav class='topbar-center'>
-        <button class='nav-tab active' data-tab='farm-overview'>Farm Overview</button><button class='nav-tab' data-tab='market-signals'>Market Signals</button><button class='nav-tab' data-tab='scenario-lab'>Scenario Lab</button><button class='nav-tab' data-tab='data-upload'>Upload Data</button>
+        <button class='nav-tab active' data-tab='farm-overview'>Farm Overview</button><button class='nav-tab' data-tab='market-signals'>Market Signals</button><button class='nav-tab' data-tab='reports'>Reports</button><button class='nav-tab' data-tab='data-upload'>Upload Data</button>
       </nav>
       <div class='topbar-right'>
         <div class='status-pill'><span class='dot'></span>Data Live</div>
@@ -350,56 +361,96 @@
       </section>
 
 
-      <section class='content-view' id='scenario-lab'>
-        <div class='section-head'><div><h2>Scenario Lab</h2><p>Interactive simulation tools layered on top of the current economics engine.</p></div></div>
-        <div class='grid-two'>
-          
-    <section class='panel'>
-      <div class='panel-header'>
+      <section class='content-view' id='reports'>
+  <div class='section-head'>
+    <div><h2>Report Generator</h2><p>Build, preview and export comprehensive farm reports.</p></div>
+    <div style='display:flex;gap:10px'>
+      <button class='action-btn secondary' onclick='window.print()' id='printReportBtn' style='display:none'>&#x1F5A8; Export PDF</button>
+      <button class='action-btn secondary' id='exportCsvBtn' onclick='exportReportCsv()' style='display:none'>&#x2B07; Export CSV</button>
+    </div>
+  </div>
+
+  <!-- Report builder -->
+  <section class='panel' id='reportBuilder' style='margin-bottom:16px'>
+    <div class='panel-header'><div><h3>Report builder</h3><p>Configure and generate your report.</p></div></div>
+    <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px'>
+
+      <label class='control-row' style='margin:0'>
+        <div class='control-label'>Report type</div>
+        <div class='input-wrap'>
+          <select id='reportType' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)' onchange='onReportTypeChange()'>
+            <option value='herd-summary'>Herd Summary</option>
+            <option value='individual-animal'>Individual Animal</option>
+            <option value='farm-comparison'>Farm Comparison</option>
+            <option value='health-alerts'>Health &amp; Estrus Alerts</option>
+            <option value='milk-production'>Milk Production</option>
+            <option value='data-quality'>Data Quality</option>
+          </select>
+        </div>
+      </label>
+
+      <label class='control-row' style='margin:0' id='reportFarmRow'>
+        <div class='control-label'>Farm</div>
+        <div class='input-wrap'>
+          <select id='reportFarm' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)' onchange='onReportFarmChange()'>
+            <option value='__all__'>All farms</option>
+          </select>
+        </div>
+      </label>
+
+      <label class='control-row' style='margin:0' id='reportAnimalRow' style='display:none'>
+        <div class='control-label'>Animal</div>
+        <div class='input-wrap'>
+          <select id='reportAnimal' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'>
+            <option value='__all__'>All animals</option>
+          </select>
+        </div>
+      </label>
+
+      <label class='control-row' style='margin:0'>
+        <div class='control-label'>Date from</div>
+        <div class='input-wrap'><input id='reportDateFrom' type='date' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+      </label>
+
+      <label class='control-row' style='margin:0'>
+        <div class='control-label'>Date to</div>
+        <div class='input-wrap'><input id='reportDateTo' type='date' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></div>
+      </label>
+
+    </div>
+    <button class='action-btn' id='generateReportBtn' onclick='generateReport()' style='min-width:180px'>Generate report</button>
+    <div id='reportStatus' style='margin-top:10px;font-size:13px;color:var(--muted)'></div>
+  </section>
+
+  <!-- Report output — this is what gets printed -->
+  <div id='reportOutput' style='display:none'>
+
+    <!-- Report header (shown in print) -->
+    <div id='reportHeader' style='margin-bottom:20px'>
+      <div style='display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2px solid var(--primary)'>
         <div>
-          <h3>Import parity comparison</h3>
-          <p>Current scenario versus baseline import parity.</p>
+          <div style='font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--secondary);font-weight:700'>Livestock Intelligence Platform</div>
+          <div id='reportTitle' style='font-size:24px;font-weight:800;color:var(--primary);margin:4px 0'></div>
+          <div id='reportMeta' style='color:var(--muted);font-size:13px'></div>
+        </div>
+        <div style='text-align:right;font-size:12px;color:var(--muted)'>
+          <div id='reportGenDate'></div>
+          <div id='reportFarmLabel'></div>
         </div>
       </div>
-      <div class='chart-wrap' style='height:260px'>
-        <canvas id='scenarioImportParityChart'></canvas>
-      </div>
-    </section>
-    
-          
-    <section class='panel'>
-      <div class='panel-header'>
-        <div>
-          <h3>Break-even yield path</h3>
-          <p>Yield required to achieve zero margin against imports.</p>
-        </div>
-      </div>
-      <div class='chart-wrap' style='height:260px'>
-        <canvas id='scenarioBreakEvenChart'></canvas>
-      </div>
-    </section>
-    
-        </div>
-        
-    <section class='panel'>
-      <div class='panel-header'>
-        <div>
-          <h3>Scenario Summary</h3>
-          <p>Interactive simulation based on existing economics outputs and user-side assumptions.</p>
-        </div>
-      </div>
-      <div class='scenario-summary-grid'>
-        <div class='scenario-metric'><span>Break-even yield</span><strong id='breakEvenYield'>—</strong></div>
-        <div class='scenario-metric'><span>Import parity comparison</span><strong id='scenarioImportComparison'>—</strong></div>
-        <div class='scenario-metric'><span>Profit sensitivity range</span><strong id='profitSensitivityRange'>—</strong></div>
-      </div>
-      <div class='surface-wrap'>
-        <div class='surface-title'>Profit sensitivity surface</div>
-        <div id='profitSurface' class='profit-surface'></div>
-      </div>
-    </section>
-    
-      </section>
+    </div>
+
+    <!-- KPI summary row -->
+    <div id='reportKpiRow' class='kpi-grid' style='margin-bottom:18px'></div>
+
+    <!-- Charts row -->
+    <div id='reportChartsRow' style='margin-bottom:16px'></div>
+
+    <!-- Tables -->
+    <div id='reportTablesRow'></div>
+
+  </div>
+</section>
 
       <!-- ── Upload Data tab ─────────────────────────────────────────── -->
       <section class='content-view' id='data-upload'>
@@ -745,9 +796,10 @@
   }
 
   function buildProfitSurface() {
+    const surface = document.getElementById('profitSurface');
+    if (!surface) return;
     const yields = [4,6,8,10,12,14];
     const feeds = [350,400,450,500,550,600];
-    const surface = document.getElementById('profitSurface');
     const values = [];
     feeds.forEach(feed => yields.forEach(yieldLevel => values.push(calculateMetrics({ ...getScenario(), feedCost:feed, milkYieldPerCow:yieldLevel }).profitPerHerd)));
     const min = Math.min(...values), max = Math.max(...values);
@@ -1301,6 +1353,511 @@
     }
   }
 
+  // ── Report Generator ──────────────────────────────────────────────────────
+  const reportCharts = {};
+  let reportData = null;
+
+  function onReportTypeChange() {
+    const type = document.getElementById('reportType').value;
+    const animalRow = document.getElementById('reportAnimalRow');
+    const farmSel   = document.getElementById('reportFarm');
+    // Individual animal: farm must be specific, animal shown
+    if (type === 'individual-animal') {
+      animalRow.style.display = 'block';
+      // Remove __all__ option
+      Array.from(farmSel.options).forEach(o => { if (o.value === '__all__') o.disabled = true; });
+      if (farmSel.value === '__all__') farmSel.selectedIndex = 1;
+      onReportFarmChange();
+    } else {
+      animalRow.style.display = 'none';
+      Array.from(farmSel.options).forEach(o => { o.disabled = false; });
+    }
+    // Farm comparison: disable single-farm selector
+    if (type === 'farm-comparison') {
+      farmSel.value = '__all__';
+      farmSel.disabled = true;
+    } else {
+      farmSel.disabled = false;
+    }
+  }
+
+  async function onReportFarmChange() {
+    const farmId   = document.getElementById('reportFarm').value;
+    const animalSel = document.getElementById('reportAnimal');
+    animalSel.innerHTML = '<option value="__all__">All animals</option>';
+    if (farmId === '__all__') return;
+    try {
+      const res  = await fetch(`/api/farm/${farmId}/full`, { cache:'no-store' });
+      const data = await res.json();
+      (data.coverage || data.records_per_animal || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.animal_id;
+        opt.textContent = `${c.animal_id}  (${c.records} records)`;
+        animalSel.appendChild(opt);
+      });
+      // Set date range defaults from farm data range
+      if (data.summary?.date_range?.length === 2) {
+        document.getElementById('reportDateFrom').value = data.summary.date_range[0];
+        document.getElementById('reportDateTo').value   = data.summary.date_range[1];
+      }
+    } catch(e) { console.warn('Could not load farm animals:', e); }
+  }
+
+  function populateReportFarmSelector() {
+    const sel = document.getElementById('reportFarm');
+    if (!farmsIndex?.farms?.length) return;
+    sel.innerHTML = '<option value="__all__">All farms</option>' +
+      farmsIndex.farms.map(f => `<option value='${f.farm_id}'>${f.name || f.farm_id}</option>`).join('');
+    // Set initial date range
+    const allDates = farmsIndex.farms.flatMap(f => f.date_range || []).sort();
+    if (allDates.length) {
+      document.getElementById('reportDateFrom').value = allDates[0];
+      document.getElementById('reportDateTo').value   = allDates[allDates.length - 1];
+    }
+  }
+
+  function destroyReportCharts() {
+    Object.values(reportCharts).forEach(c => c?.destroy?.());
+    Object.keys(reportCharts).forEach(k => delete reportCharts[k]);
+  }
+
+  function reportKpiCard(label, value, sub='', color='var(--primary)') {
+    return `<section class='kpi-card'><div class='kpi-label'>${label}</div><div class='kpi-value' style='color:${color}'>${value}</div>${sub ? `<div class='kpi-subtext'>${sub}</div>` : ''}</section>`;
+  }
+
+  function filterByDate(rows, dateKey, from, to) {
+    return rows.filter(r => {
+      const d = r[dateKey];
+      return (!from || d >= from) && (!to || d <= to);
+    });
+  }
+
+  function mkChartPanel(canvasId, title, sub='', height=280) {
+    return `<section class='panel' style='margin-bottom:16px'><div class='panel-header'><div><h3>${title}</h3>${sub ? `<p>${sub}</p>` : ''}</div></div><div class='chart-wrap' style='height:${height}px'><canvas id='${canvasId}'></canvas></div></section>`;
+  }
+
+  function mkTablePanel(title, sub, headHtml, tbodyId) {
+    return `<section class='panel' style='margin-bottom:16px'><div class='panel-header'><div><h3>${title}</h3>${sub ? `<p>${sub}</p>` : ''}</div></div><div class='table-wrap'><table><thead>${headHtml}</thead><tbody id='${tbodyId}'></tbody></table></div></section>`;
+  }
+
+  async function generateReport() {
+    const type     = document.getElementById('reportType').value;
+    const farmId   = document.getElementById('reportFarm').value;
+    const animalId = document.getElementById('reportAnimal').value;
+    const from     = document.getElementById('reportDateFrom').value;
+    const to       = document.getElementById('reportDateTo').value;
+
+    const statusEl = document.getElementById('reportStatus');
+    statusEl.textContent = 'Fetching data…';
+    destroyReportCharts();
+
+    const output = document.getElementById('reportOutput');
+    output.style.display = 'none';
+    document.getElementById('printReportBtn').style.display = 'none';
+    document.getElementById('exportCsvBtn').style.display   = 'none';
+
+    try {
+      if (type === 'herd-summary')      await renderHerdSummaryReport(farmId, from, to);
+      if (type === 'individual-animal') await renderIndividualAnimalReport(farmId, animalId, from, to);
+      if (type === 'farm-comparison')   await renderFarmComparisonReport(from, to);
+      if (type === 'health-alerts')     await renderHealthAlertsReport(farmId, from, to);
+      if (type === 'milk-production')   await renderMilkReport(farmId, from, to);
+      if (type === 'data-quality')      await renderDataQualityReport(farmId, from, to);
+
+      output.style.display = 'block';
+      document.getElementById('printReportBtn').style.display = 'inline-flex';
+      document.getElementById('exportCsvBtn').style.display   = 'inline-flex';
+      statusEl.textContent = '';
+    } catch(e) {
+      statusEl.textContent = '✗ ' + e.message;
+      console.error(e);
+    }
+  }
+
+  function setReportHeader(title, farmLabel, from, to) {
+    document.getElementById('reportTitle').textContent   = title;
+    document.getElementById('reportMeta').textContent    = from && to ? `${from} → ${to}` : 'All dates';
+    document.getElementById('reportGenDate').textContent = 'Generated ' + new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+    document.getElementById('reportFarmLabel').textContent = farmLabel;
+    document.getElementById('reportKpiRow').innerHTML    = '';
+    document.getElementById('reportChartsRow').innerHTML = '';
+    document.getElementById('reportTablesRow').innerHTML = '';
+  }
+
+  // ── 1. Herd Summary ──
+  async function renderHerdSummaryReport(farmId, from, to) {
+    const farms = farmId === '__all__' ? (farmsIndex?.farms || []) : [farmsIndex.farms.find(f => f.farm_id === farmId)];
+    const farmLabel = farmId === '__all__' ? 'All farms' : farms[0]?.name;
+    setReportHeader('Herd Summary Report', farmLabel, from, to);
+
+    // Fetch all farm data
+    const datasets = await Promise.all(farms.map(f => fetch(`/api/farm/${f.farm_id}/full`,{cache:'no-store'}).then(r=>r.json()).catch(()=>null)));
+
+    // KPIs — aggregate across farms
+    let totalAnimals=0, totalRecords=0, totalHealth=0, totalEstrus=0;
+    datasets.forEach((d,i) => {
+      if (!d) return;
+      totalAnimals += d.summary?.animals || 0;
+      totalRecords += d.summary?.records || 0;
+      totalHealth  += (d.health_alerts||[]).filter(a => !from || a.timestamp >= from).filter(a => !to || a.timestamp <= to).length;
+      totalEstrus  += (d.estrus_alerts||[]).filter(a => !from || a.timestamp >= from).filter(a => !to || a.timestamp <= to).length;
+    });
+    document.getElementById('reportKpiRow').innerHTML =
+      reportKpiCard('Animals monitored', totalAnimals.toLocaleString()) +
+      reportKpiCard('Records in period', totalRecords.toLocaleString()) +
+      reportKpiCard('Health alerts', totalHealth, 'in selected period', totalHealth > 0 ? '#dc2626' : 'var(--good)') +
+      reportKpiCard('Estrus alerts', totalEstrus, 'in selected period', '#f59e0b');
+
+    // Activity chart per farm or combined
+    const chartsRow = document.getElementById('reportChartsRow');
+    chartsRow.innerHTML = mkChartPanel('rptActivityChart','Herd average activity over time','Daily mean activity rate') +
+                          mkChartPanel('rptRuminationChart','Herd average rumination over time','Daily mean rumination minutes');
+
+    const COLORS = ['#0F4C75','#3282B8','#FFD166','#17b26a'];
+    const allDates = [...new Set(datasets.flatMap(d => (d?.daily_averages||[]).map(r=>r.date)))].sort();
+    const filtered = allDates.filter(d => (!from||d>=from) && (!to||d<=to));
+
+    reportCharts.activity = new Chart(document.getElementById('rptActivityChart'), {
+      type:'line',
+      data:{ labels:filtered, datasets: datasets.map((d,i) => ({
+        label: farms[i]?.name || farms[i]?.farm_id,
+        data: filtered.map(dt => d?.daily_averages?.find(r=>r.date===dt)?.activity_rate ?? null),
+        borderColor: COLORS[i%COLORS.length], tension:.25, pointRadius:0, spanGaps:true
+      }))},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}}} }
+    });
+    reportCharts.rumination = new Chart(document.getElementById('rptRuminationChart'), {
+      type:'line',
+      data:{ labels:filtered, datasets: datasets.map((d,i) => ({
+        label: farms[i]?.name || farms[i]?.farm_id,
+        data: filtered.map(dt => d?.daily_averages?.find(r=>r.date===dt)?.rumination_min ?? null),
+        borderColor: COLORS[i%COLORS.length], tension:.25, pointRadius:0, spanGaps:true
+      }))},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}}} }
+    });
+
+    // Alert tables
+    const tablesRow = document.getElementById('reportTablesRow');
+    tablesRow.innerHTML =
+      mkTablePanel('Health alerts','Behavioural drift alerts in selected period','<tr><th>Farm</th><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr>','rptHealthTbl') +
+      mkTablePanel('Estrus alerts','Heat detection candidates in selected period','<tr><th>Farm</th><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr>','rptEstrusTbl');
+
+    const hRows = datasets.flatMap((d,i) => (d?.health_alerts||[]).filter(a=>(!from||a.timestamp>=from)&&(!to||a.timestamp<=to)).map(a=>({...a,farm:farms[i]?.name})));
+    const eRows = datasets.flatMap((d,i) => (d?.estrus_alerts||[]).filter(a=>(!from||a.timestamp>=from)&&(!to||a.timestamp<=to)).map(a=>({...a,farm:farms[i]?.name})));
+
+    document.getElementById('rptHealthTbl').innerHTML = hRows.length
+      ? hRows.map(r=>`<tr><td>${r.farm}</td><td>${r.animal_id}</td><td>${r.timestamp}</td><td>${r.health_score}</td><td><span style='color:${r.health_status==="ALERT"?"#dc2626":"#f59e0b"};font-weight:700'>${r.health_status}</span></td></tr>`).join('')
+      : '<tr><td colspan="5" style="color:var(--muted)">No health alerts in period</td></tr>';
+    document.getElementById('rptEstrusTbl').innerHTML = eRows.length
+      ? eRows.map(r=>`<tr><td>${r.farm}</td><td>${r.animal_id}</td><td>${r.timestamp}</td><td>${r.estrus_score}</td><td><span style='color:${r.estrus_status==="HIGH"?"#dc2626":"#f59e0b"};font-weight:700'>${r.estrus_status}</span></td></tr>`).join('')
+      : '<tr><td colspan="5" style="color:var(--muted)">No estrus alerts in period</td></tr>';
+
+    reportData = { type:'herd-summary', health:hRows, estrus:eRows };
+  }
+
+  // ── 2. Individual Animal ──
+  async function renderIndividualAnimalReport(farmId, animalId, from, to) {
+    if (!farmId || farmId === '__all__') throw new Error('Select a specific farm for individual animal reports');
+    const farm = farmsIndex?.farms?.find(f => f.farm_id === farmId);
+    const farmName = farm?.name || farmId;
+    setReportHeader('Individual Animal Report', farmName, from, to);
+
+    const herdRes  = await fetch(`/api/farm/${farmId}/full`, {cache:'no-store'});
+    const herdData = await herdRes.json();
+
+    // Determine which animals to report
+    const animals = animalId === '__all__'
+      ? (herdData.coverage || herdData.records_per_animal || []).map(c => c.animal_id)
+      : [animalId];
+
+    // KPIs for selected animal(s)
+    const coverage = (herdData.coverage || []).filter(c => animals.includes(c.animal_id));
+    document.getElementById('reportKpiRow').innerHTML =
+      reportKpiCard('Animals in report', animals.length) +
+      reportKpiCard('Records coverage', coverage.reduce((s,c)=>s+c.records,0).toLocaleString()) +
+      reportKpiCard('Date range', from && to ? `${from} → ${to}` : 'Full period') +
+      reportKpiCard('Farm', farmName);
+
+    const chartsRow  = document.getElementById('reportChartsRow');
+    const tablesRow  = document.getElementById('reportTablesRow');
+
+    // If single animal — fetch full timeseries
+    if (animals.length === 1) {
+      const aid = animals[0];
+      const res  = await fetch(`/api/farm/${farmId}/animal/${aid}`, {cache:'no-store'});
+      const { records } = await res.json();
+      const filtered = records.filter(r => (!from||r.timestamp>=from) && (!to||r.timestamp<=to));
+      const labels = filtered.map(r => r.timestamp);
+
+      chartsRow.innerHTML =
+        mkChartPanel('rptAnimalActivity',`Activity rate — ${aid}`,'',240) +
+        mkChartPanel('rptAnimalRumination',`Rumination — ${aid}`,'minutes/day',240) +
+        mkChartPanel('rptAnimalEating',`Eating — ${aid}`,'minutes/day',240) +
+        mkChartPanel('rptAnimalResting',`Resting — ${aid}`,'minutes/day',240);
+
+      const mkLine = (id, key, color) => new Chart(document.getElementById(id), {
+        type:'line', data:{ labels, datasets:[{ label:key, data:filtered.map(r=>r[key]??null), borderColor:color, tension:.25, pointRadius:0, fill:true, backgroundColor:color+'18' }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:10,maxRotation:45}}} }
+      });
+      reportCharts.a1 = mkLine('rptAnimalActivity',  'activity_rate',  '#0F4C75');
+      reportCharts.a2 = mkLine('rptAnimalRumination','rumination_min', '#3282B8');
+      reportCharts.a3 = mkLine('rptAnimalEating',    'eating_min',     '#FFD166');
+      reportCharts.a4 = mkLine('rptAnimalResting',   'resting_min',    '#17b26a');
+
+      // Alerts for this animal
+      const health = (herdData.health_alerts||[]).filter(a=>a.animal_id===aid&&(!from||a.timestamp>=from)&&(!to||a.timestamp<=to));
+      const estrus = (herdData.estrus_alerts||[]).filter(a=>a.animal_id===aid&&(!from||a.timestamp>=from)&&(!to||a.timestamp<=to));
+
+      tablesRow.innerHTML =
+        mkTablePanel(`Health alerts — ${aid}`,'','<tr><th>Date</th><th>Score</th><th>Status</th></tr>','rptAnimalHealthTbl') +
+        mkTablePanel(`Estrus alerts — ${aid}`,'','<tr><th>Date</th><th>Score</th><th>Status</th></tr>','rptAnimalEstrusTbl');
+
+      document.getElementById('rptAnimalHealthTbl').innerHTML = health.length
+        ? health.map(r=>`<tr><td>${r.timestamp}</td><td>${r.health_score}</td><td style='color:${r.health_status==="ALERT"?"#dc2626":"#f59e0b"};font-weight:700'>${r.health_status}</td></tr>`).join('')
+        : '<tr><td colspan="3" style="color:var(--muted)">No health alerts</td></tr>';
+      document.getElementById('rptAnimalEstrusTbl').innerHTML = estrus.length
+        ? estrus.map(r=>`<tr><td>${r.timestamp}</td><td>${r.estrus_score}</td><td style='color:${r.estrus_status==="HIGH"?"#dc2626":"#f59e0b"};font-weight:700'>${r.estrus_status}</td></tr>`).join('')
+        : '<tr><td colspan="3" style="color:var(--muted)">No estrus alerts</td></tr>';
+
+      reportData = { type:'individual-animal', animal:aid, records:filtered };
+    } else {
+      // Multi-animal: show records per animal bar + coverage table
+      chartsRow.innerHTML = mkChartPanel('rptMultiAnimalChart','Records per animal','Coverage depth across the herd',320);
+      reportCharts.multi = new Chart(document.getElementById('rptMultiAnimalChart'), {
+        type:'bar',
+        data:{ labels:coverage.map(c=>c.animal_id), datasets:[{ label:'Records', data:coverage.map(c=>c.records), backgroundColor:'#3282B8' }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxRotation:90}}} }
+      });
+      tablesRow.innerHTML = mkTablePanel('Animal coverage','Record count and date range per animal','<tr><th>Animal ID</th><th>Records</th><th>Start</th><th>End</th></tr>','rptCoverageTbl');
+      document.getElementById('rptCoverageTbl').innerHTML = coverage.map(c=>`<tr><td>${c.animal_id}</td><td>${c.records}</td><td>${c.start||'—'}</td><td>${c.end||'—'}</td></tr>`).join('');
+      reportData = { type:'individual-animal-all', coverage };
+    }
+  }
+
+  // ── 3. Farm Comparison ──
+  async function renderFarmComparisonReport(from, to) {
+    setReportHeader('Farm Comparison Report', 'All farms', from, to);
+    const farms    = farmsIndex?.farms || [];
+    const datasets = await Promise.all(farms.map(f => fetch(`/api/farm/${f.farm_id}/full`,{cache:'no-store'}).then(r=>r.json()).catch(()=>null)));
+
+    const COLORS = ['#0F4C75','#3282B8','#FFD166','#17b26a','#f59e0b','#8b5cf6'];
+    const labels = farms.map(f => f.name || f.farm_id);
+
+    document.getElementById('reportKpiRow').innerHTML =
+      reportKpiCard('Farms compared', farms.length) +
+      reportKpiCard('Total animals', farms.reduce((s,f)=>s+(f.animals||0),0).toLocaleString()) +
+      reportKpiCard('Total records', farms.reduce((s,f)=>s+(f.records||0),0).toLocaleString()) +
+      reportKpiCard('Avg data quality', (farms.reduce((s,f)=>s+(f.data_quality_pct||0),0)/Math.max(farms.length,1)).toFixed(1)+'%');
+
+    const chartsRow = document.getElementById('reportChartsRow');
+    chartsRow.innerHTML =
+      `<div class='grid-two' style='margin-bottom:16px'>` +
+        mkChartPanel('rptCmpActivity','Avg activity rate by farm','%',260) +
+        mkChartPanel('rptCmpRumination','Avg rumination by farm','min/day',260) +
+      `</div><div class='grid-two'>` +
+        mkChartPanel('rptCmpHealth','Health alert count','per farm',260) +
+        mkChartPanel('rptCmpQuality','Data quality','% collection rate',260) +
+      `</div>`;
+
+    const mkBar = (id, data) => new Chart(document.getElementById(id), {
+      type:'bar', data:{ labels, datasets:[{ data, backgroundColor:farms.map((_,i)=>COLORS[i%COLORS.length]) }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+    reportCharts.ca = mkBar('rptCmpActivity',   farms.map(f=>f.avg_activity_rate||0));
+    reportCharts.cr = mkBar('rptCmpRumination', farms.map(f=>f.avg_rumination_min||0));
+    reportCharts.ch = mkBar('rptCmpHealth',     farms.map(f=>f.health_alert_count||0));
+    reportCharts.cq = mkBar('rptCmpQuality',    farms.map(f=>f.data_quality_pct||0));
+
+    const tablesRow = document.getElementById('reportTablesRow');
+    tablesRow.innerHTML = mkTablePanel('Farm summary table','KPI comparison across all registered farms',
+      '<tr><th>Farm</th><th>Location</th><th>Animals</th><th>Records</th><th>Avg activity</th><th>Avg rumination</th><th>Health alerts</th><th>Estrus alerts</th><th>Data quality</th></tr>',
+      'rptFarmCmpTbl');
+    document.getElementById('rptFarmCmpTbl').innerHTML = farms.map(f =>
+      `<tr><td><strong>${f.name||f.farm_id}</strong><br><span style='font-size:11px;color:var(--muted)'>${f.farm_id}</span></td><td>${f.location||'—'}</td><td>${f.animals||'—'}</td><td>${(f.records||0).toLocaleString()}</td><td>${f.avg_activity_rate||'—'}</td><td>${f.avg_rumination_min||'—'}</td><td style='color:${(f.health_alert_count||0)>5?"#dc2626":"inherit"}'>${f.health_alert_count||0}</td><td>${f.estrus_alert_count||0}</td><td style='color:${(f.data_quality_pct||0)>=95?"#0d7a47":(f.data_quality_pct||0)>=80?"#f59e0b":"#dc2626"}'>${f.data_quality_pct||'—'}%</td></tr>`
+    ).join('');
+    reportData = { type:'farm-comparison', farms };
+  }
+
+  // ── 4. Health & Estrus Alerts ──
+  async function renderHealthAlertsReport(farmId, from, to) {
+    const farms = farmId === '__all__' ? (farmsIndex?.farms||[]) : [farmsIndex.farms.find(f=>f.farm_id===farmId)];
+    setReportHeader('Health & Estrus Alert Report', farmId==='__all__'?'All farms':farms[0]?.name, from, to);
+    const datasets = await Promise.all(farms.map(f=>fetch(`/api/farm/${f.farm_id}/full`,{cache:'no-store'}).then(r=>r.json()).catch(()=>null)));
+
+    const health = datasets.flatMap((d,i)=>(d?.health_alerts||[]).filter(a=>(!from||a.timestamp>=from)&&(!to||a.timestamp<=to)).map(a=>({...a,farm:farms[i]?.name,farm_id:farms[i]?.farm_id})));
+    const estrus = datasets.flatMap((d,i)=>(d?.estrus_alerts||[]).filter(a=>(!from||a.timestamp>=from)&&(!to||a.timestamp<=to)).map(a=>({...a,farm:farms[i]?.name,farm_id:farms[i]?.farm_id})));
+
+    const alertAnimals = new Set([...health.map(a=>a.animal_id),...estrus.map(a=>a.animal_id)]);
+    document.getElementById('reportKpiRow').innerHTML =
+      reportKpiCard('Health alerts', health.length, 'in period', health.length>0?'#dc2626':'var(--good)') +
+      reportKpiCard('Estrus candidates', estrus.length, 'in period', '#f59e0b') +
+      reportKpiCard('Animals flagged', alertAnimals.size) +
+      reportKpiCard('Farms covered', farms.length);
+
+    // Alert timeline chart
+    const chartsRow = document.getElementById('reportChartsRow');
+    chartsRow.innerHTML = mkChartPanel('rptAlertTimeline','Alert timeline','Health and estrus alerts over time',260);
+    const allDates = [...new Set([...health,...estrus].map(a=>a.timestamp))].sort().filter(d=>(!from||d>=from)&&(!to||d<=to));
+    reportCharts.timeline = new Chart(document.getElementById('rptAlertTimeline'), {
+      type:'bar',
+      data:{ labels:allDates, datasets:[
+        { label:'Health alerts', data:allDates.map(d=>health.filter(a=>a.timestamp===d).length), backgroundColor:'#dc2626' },
+        { label:'Estrus alerts', data:allDates.map(d=>estrus.filter(a=>a.timestamp===d).length), backgroundColor:'#f59e0b' }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{x:{ticks:{maxTicksLimit:16,maxRotation:45}}} }
+    });
+
+    const tablesRow = document.getElementById('reportTablesRow');
+    tablesRow.innerHTML =
+      mkTablePanel('Health alerts','Sorted by score descending','<tr><th>Farm</th><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr>','rptHealthAlertTbl') +
+      mkTablePanel('Estrus candidates','Sorted by score descending','<tr><th>Farm</th><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr>','rptEstrusAlertTbl');
+
+    const sortDesc = (arr,key) => [...arr].sort((a,b)=>b[key]-a[key]);
+    document.getElementById('rptHealthAlertTbl').innerHTML = sortDesc(health,'health_score').length
+      ? sortDesc(health,'health_score').map(r=>`<tr><td>${r.farm}</td><td>${r.animal_id}</td><td>${r.timestamp}</td><td><strong>${r.health_score}</strong></td><td style='color:${r.health_status==="ALERT"?"#dc2626":"#f59e0b"};font-weight:700'>${r.health_status}</td></tr>`).join('')
+      : '<tr><td colspan="5" style="color:var(--muted)">No health alerts in period</td></tr>';
+    document.getElementById('rptEstrusAlertTbl').innerHTML = sortDesc(estrus,'estrus_score').length
+      ? sortDesc(estrus,'estrus_score').map(r=>`<tr><td>${r.farm}</td><td>${r.animal_id}</td><td>${r.timestamp}</td><td><strong>${r.estrus_score}</strong></td><td style='color:${r.estrus_status==="HIGH"?"#dc2626":"#f59e0b"};font-weight:700'>${r.estrus_status}</td></tr>`).join('')
+      : '<tr><td colspan="5" style="color:var(--muted)">No estrus alerts in period</td></tr>';
+
+    reportData = { type:'health-alerts', health, estrus };
+  }
+
+  // ── 5. Milk Production ──
+  async function renderMilkReport(farmId, from, to) {
+    const farms = farmId === '__all__' ? (farmsIndex?.farms||[]) : [farmsIndex.farms.find(f=>f.farm_id===farmId)];
+    setReportHeader('Milk Production Report', farmId==='__all__'?'All farms':farms[0]?.name, from, to);
+    const milkDatasets = await Promise.all(farms.map(f=>fetch(`/api/farm/${f.farm_id}/milk`,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null)));
+
+    const COLORS = ['#0F4C75','#3282B8','#FFD166','#17b26a'];
+    const allDates = [...new Set(milkDatasets.flatMap(d=>(d?.daily||[]).map(r=>r.date)))].sort().filter(d=>(!from||d>=from)&&(!to||d<=to));
+
+    const totAvg = milkDatasets.filter(Boolean).reduce((s,d)=>s+(d.summary?.avg_yield_l_per_cow_per_day||0),0) / Math.max(milkDatasets.filter(Boolean).length,1);
+    const totCows = milkDatasets.filter(Boolean).reduce((s,d)=>s+(d.summary?.total_cows||0),0);
+
+    document.getElementById('reportKpiRow').innerHTML =
+      reportKpiCard('Farms with milk data', milkDatasets.filter(Boolean).length) +
+      reportKpiCard('Total cows tracked', totCows.toLocaleString()) +
+      reportKpiCard('Portfolio avg yield', totAvg.toFixed(2)+' L/cow/day') +
+      reportKpiCard('Date range', from&&to?`${from} → ${to}`:'Full period');
+
+    const chartsRow = document.getElementById('reportChartsRow');
+    chartsRow.innerHTML = mkChartPanel('rptMilkTimeline','Daily average yield','L / cow / day',300) +
+      mkChartPanel('rptMilkBar','Average yield by farm','L / cow / day',260);
+
+    reportCharts.milkLine = new Chart(document.getElementById('rptMilkTimeline'), {
+      type:'line',
+      data:{ labels:allDates, datasets:milkDatasets.map((d,i)=>({
+        label:farms[i]?.name||farms[i]?.farm_id,
+        data:allDates.map(dt=>d?.daily?.find(r=>r.date===dt)?.avg_yield??null),
+        borderColor:COLORS[i%COLORS.length], tension:.25, pointRadius:0, spanGaps:true
+      }))},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}}, y:{title:{display:true,text:'L/cow/day'}}} }
+    });
+    reportCharts.milkBar = new Chart(document.getElementById('rptMilkBar'), {
+      type:'bar',
+      data:{ labels:farms.map(f=>f.name||f.farm_id), datasets:[{ label:'Avg yield', data:milkDatasets.map(d=>d?.summary?.avg_yield_l_per_cow_per_day||0), backgroundColor:farms.map((_,i)=>COLORS[i%COLORS.length]) }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+
+    const tablesRow = document.getElementById('reportTablesRow');
+    tablesRow.innerHTML = mkTablePanel('Milk production summary','Per-farm statistics','<tr><th>Farm</th><th>Cows tracked</th><th>Avg yield (L/cow/day)</th><th>Date range</th></tr>','rptMilkSummaryTbl');
+    document.getElementById('rptMilkSummaryTbl').innerHTML = milkDatasets.map((d,i)=>
+      d ? `<tr><td>${farms[i]?.name||farms[i]?.farm_id}</td><td>${d.summary?.total_cows||'—'}</td><td><strong>${d.summary?.avg_yield_l_per_cow_per_day||'—'}</strong></td><td>${d.summary?.date_range?.join(' → ')||'—'}</td></tr>`
+        : `<tr><td>${farms[i]?.name}</td><td colspan="3" style="color:var(--muted)">No milk data available</td></tr>`
+    ).join('');
+    reportData = { type:'milk-production', milkDatasets, farms };
+  }
+
+  // ── 6. Data Quality ──
+  async function renderDataQualityReport(farmId, from, to) {
+    const farms = farmId === '__all__' ? (farmsIndex?.farms||[]) : [farmsIndex.farms.find(f=>f.farm_id===farmId)];
+    setReportHeader('Data Quality Report', farmId==='__all__'?'All farms':farms[0]?.name, from, to);
+    const datasets = await Promise.all(farms.map(f=>fetch(`/api/farm/${f.farm_id}/full`,{cache:'no-store'}).then(r=>r.json()).catch(()=>null)));
+
+    const avgQuality = farms.reduce((s,f)=>s+(f.data_quality_pct||0),0)/Math.max(farms.length,1);
+    const totalMissing = datasets.flatMap(d=>d?.missingness||[]).filter(m=>m.missing_fraction>0).length;
+
+    document.getElementById('reportKpiRow').innerHTML =
+      reportKpiCard('Farms assessed', farms.length) +
+      reportKpiCard('Avg data quality', avgQuality.toFixed(1)+'%', '', avgQuality>=95?'var(--good)':avgQuality>=80?'#f59e0b':'#dc2626') +
+      reportKpiCard('Variables with gaps', totalMissing) +
+      reportKpiCard('Period', from&&to?`${from} → ${to}`:'Full dataset');
+
+    const chartsRow = document.getElementById('reportChartsRow');
+    chartsRow.innerHTML = mkChartPanel('rptQualityTimeline','Data collection rate over time','% daily collection rate',280) +
+      mkChartPanel('rptMissingnessChart','Missingness by variable','Fraction of missing values',280);
+
+    const COLORS = ['#0F4C75','#3282B8','#FFD166','#17b26a'];
+    const allDates = [...new Set(datasets.flatMap(d=>(d?.daily_averages||[]).map(r=>r.date)))].sort().filter(d=>(!from||d>=from)&&(!to||d<=to));
+    reportCharts.quality = new Chart(document.getElementById('rptQualityTimeline'), {
+      type:'line',
+      data:{ labels:allDates, datasets:datasets.map((d,i)=>({
+        label:farms[i]?.name||farms[i]?.farm_id,
+        data:allDates.map(dt=>d?.daily_averages?.find(r=>r.date===dt)?.data_collection_rate_pct??null),
+        borderColor:COLORS[i%COLORS.length], tension:.25, pointRadius:0, spanGaps:true
+      }))},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{min:0,max:105,title:{display:true,text:'%'}}} }
+    });
+
+    // Missingness — use first farm or aggregate
+    const missingness = datasets[0]?.missingness || [];
+    reportCharts.missing = new Chart(document.getElementById('rptMissingnessChart'), {
+      type:'bar',
+      data:{ labels:missingness.map(m=>m.variable), datasets:[{ label:'Missing %', data:missingness.map(m=>+(m.missing_fraction*100).toFixed(2)), backgroundColor:'#FFD166' }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxRotation:90}},y:{title:{display:true,text:'%'}}} }
+    });
+
+    const tablesRow = document.getElementById('reportTablesRow');
+    tablesRow.innerHTML = mkTablePanel('Validation summary','Automated data checks per farm',
+      '<tr><th>Farm</th><th>Animals</th><th>Records</th><th>Duplicates removed</th><th>Missing animal IDs</th><th>Missing timestamps</th><th>Data quality %</th></tr>',
+      'rptQualityTbl');
+    document.getElementById('rptQualityTbl').innerHTML = datasets.map((d,i)=>{
+      const v = d?.validation || {};
+      const q = farms[i]?.data_quality_pct;
+      return `<tr><td>${farms[i]?.name||farms[i]?.farm_id}</td><td>${d?.summary?.animals||'—'}</td><td>${(d?.summary?.records||0).toLocaleString()}</td><td>${v.duplicate_rows_exact??'—'}</td><td>${v.missing_animal_ids??'—'}</td><td>${v.missing_timestamps??'—'}</td><td style='color:${q>=95?"#0d7a47":q>=80?"#f59e0b":"#dc2626"};font-weight:700'>${q||'—'}%</td></tr>`;
+    }).join('');
+    reportData = { type:'data-quality', datasets, farms };
+  }
+
+  // ── CSV Export ──
+  function exportReportCsv() {
+    if (!reportData) return;
+    let csv = '', filename = 'report.csv';
+    const tocsv = rows => rows.map(r=>Object.values(r).join(',')).join('\n');
+    const header = rows => Object.keys(rows[0]||{}).join(',');
+
+    if (reportData.type === 'herd-summary') {
+      csv = 'HEALTH ALERTS\n' + (reportData.health.length ? header(reportData.health)+'\n'+tocsv(reportData.health) : 'none') +
+            '\n\nESTRUS ALERTS\n' + (reportData.estrus.length ? header(reportData.estrus)+'\n'+tocsv(reportData.estrus) : 'none');
+      filename = 'herd_summary_report.csv';
+    } else if (reportData.type === 'individual-animal') {
+      csv = header(reportData.records)+'\n'+tocsv(reportData.records);
+      filename = `animal_${reportData.animal}_report.csv`;
+    } else if (reportData.type === 'individual-animal-all') {
+      csv = header(reportData.coverage)+'\n'+tocsv(reportData.coverage);
+      filename = 'animal_coverage_report.csv';
+    } else if (reportData.type === 'farm-comparison') {
+      csv = header(reportData.farms)+'\n'+tocsv(reportData.farms);
+      filename = 'farm_comparison_report.csv';
+    } else if (reportData.type === 'health-alerts') {
+      csv = 'HEALTH\n'+(reportData.health.length?header(reportData.health)+'\n'+tocsv(reportData.health):'none')+'\n\nESTRUS\n'+(reportData.estrus.length?header(reportData.estrus)+'\n'+tocsv(reportData.estrus):'none');
+      filename = 'alert_report.csv';
+    } else if (reportData.type === 'milk-production') {
+      const rows = reportData.milkDatasets.flatMap((d,i)=>(d?.daily||[]).map(r=>({farm:reportData.farms[i]?.name,...r})));
+      csv = rows.length ? header(rows)+'\n'+tocsv(rows) : 'no data';
+      filename = 'milk_production_report.csv';
+    } else if (reportData.type === 'data-quality') {
+      const rows = reportData.farms.map((f,i)=>({ farm:f.name, ...reportData.datasets[i]?.summary }));
+      csv = header(rows)+'\n'+tocsv(rows);
+      filename = 'data_quality_report.csv';
+    }
+
+    const blob = new Blob([csv], { type:'text/csv' });
+    const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(blob), download:filename });
+    a.click(); URL.revokeObjectURL(a.href);
+  }
+
   async function bootstrap() {
     if (!await checkAuth()) return;
     bindTabs();
@@ -1309,6 +1866,7 @@
     await Promise.all([loadHerdData(), loadFarmsIndex()]);
     populateFarmSelector();
     populateUploadSelectors();
+    populateReportFarmSelector();
     const defaultFarm = farmsIndex?.farms?.[0]?.farm_id || 'farm_001';
     await loadMilkData(defaultFarm);
     renderHerdIntelligence();
