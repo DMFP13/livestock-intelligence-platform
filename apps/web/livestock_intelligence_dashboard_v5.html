@@ -24,16 +24,7 @@
     .dot { width:8px; height:8px; border-radius:50%; background:var(--good); }
     .status-meta { background:var(--bg); padding:8px 12px; border-radius:999px; }
     .status-meta.env strong { color:var(--primary); }
-    .workspace { display:grid; grid-template-columns:330px 1fr; min-height:calc(100vh - 76px); }
-    .sidebar { background:var(--card); border-right:1px solid var(--border); padding:18px 18px 24px; transition:width .25s ease, padding .25s ease; overflow:hidden; }
-    .sidebar.collapsed { width:72px; padding:18px 10px; }
-    .sidebar-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
-    .sidebar-title { font-weight:800; color:var(--primary); }
-    .sidebar-subtitle { color:var(--muted); font-size:13px; margin-top:4px; }
-    .sidebar-toggle { border:none; background:rgba(50,130,184,.12); color:var(--primary); width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:18px; }
-    .sidebar.collapsed .sidebar-title, .sidebar.collapsed .sidebar-subtitle, .sidebar.collapsed .sidebar-section h3, .sidebar.collapsed .control-row, .sidebar.collapsed .button-stack, .sidebar.collapsed .sidebar-note { display:none; }
-    .sidebar-section { border-top:1px solid var(--border); padding-top:16px; margin-top:16px; }
-    .sidebar-section h3 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--secondary); }
+    .workspace { display:grid; grid-template-columns:1fr; min-height:calc(100vh - 76px); }
     .control-row { display:block; margin-bottom:12px; }
     .control-label { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; margin-bottom:6px; }
     .tooltip { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:rgba(50,130,184,.15); color:var(--primary); font-size:10px; cursor:help; }
@@ -49,7 +40,6 @@
     .action-btn { border:none; border-radius:12px; padding:12px 14px; background:var(--primary); color:white; font-weight:700; cursor:pointer; box-shadow:var(--shadow); }
     .action-btn.secondary { background:var(--bg); color:var(--primary); box-shadow:none; border:1px solid var(--border); }
     .action-btn.accent { background:var(--accent); color:#4d3a00; }
-    .sidebar-note { color:var(--muted); font-size:12px; margin-top:12px; line-height:1.5; }
     .main-content { padding:24px; }
     .content-view { display:none; }
     .content-view.active { display:block; }
@@ -89,163 +79,57 @@
     .loading-overlay.hidden { opacity:0; pointer-events:none; }
     .loader-card { background:var(--card); padding:20px 24px; border-radius:18px; box-shadow:var(--shadow); color:var(--primary); font-weight:800; }
     @media (max-width: 1400px) { .kpi-grid, .placeholder-grid, .scenario-summary-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 1100px) { .workspace { grid-template-columns:1fr; } .sidebar { border-right:none; border-bottom:1px solid var(--border); } .grid-two { grid-template-columns:1fr; } .topbar { grid-template-columns:1fr; height:auto; padding:16px; } .topbar-center { justify-content:flex-start; } .topbar-right { flex-wrap:wrap; } }
+    @media (max-width: 1100px) { .workspace { grid-template-columns:1fr; } .grid-two { grid-template-columns:1fr; } .topbar { grid-template-columns:1fr; height:auto; padding:16px; } .topbar-center { justify-content:flex-start; } .topbar-right { flex-wrap:wrap; } }
     @media (max-width: 700px) { .kpi-grid, .placeholder-grid, .scenario-summary-grid { grid-template-columns:1fr; } .main-content { padding:16px; } }
   </style>
 </head>
 <body>
-<div class='loading-overlay' id='loadingOverlay'><div class='loader-card'>Loading control panel…</div></div>
+<div class='loading-overlay' id='loadingOverlay'><div class='loader-card'>Loading dashboard…</div></div>
 <div class='app-shell'>
   
     <header class='topbar'>
       <div class='topbar-left'>
-        <div class='platform-kicker'>Control Panel</div>
+        <div class='platform-kicker'>RLIH</div>
         <div class='platform-title'>Livestock Intelligence Platform</div>
       </div>
       <nav class='topbar-center'>
-        <button class='nav-tab active' data-tab='market-signals'>Market Signals</button><button class='nav-tab' data-tab='farm-economics'>Farm Economics</button><button class='nav-tab' data-tab='herd-intelligence'>Herd Intelligence</button><button class='nav-tab' data-tab='scenario-lab'>Scenario Lab</button>
+        <button class='nav-tab active' data-tab='farm-overview'>Farm Overview</button><button class='nav-tab' data-tab='market-signals'>Market Signals</button><button class='nav-tab' data-tab='scenario-lab'>Scenario Lab</button>
       </nav>
       <div class='topbar-right'>
         <div class='status-pill'><span class='dot'></span>Data Live</div>
         <div class='status-meta'>Updated <strong>2026-03-06T07:00:10.500808+00:00</strong></div>
         <div class='status-meta env'>Env <strong>Dev</strong></div>
+        <button onclick='logout()' style='border:none;background:transparent;color:var(--muted);font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;font-weight:600' title='Sign out'>Sign out</button>
       </div>
     </header>
     
   <div class='workspace'>
     
-    <aside class='sidebar' id='sidebar'>
-      <div class='sidebar-header'>
-        <div>
-          <div class='sidebar-title'>Control Panel</div>
-          <div class='sidebar-subtitle'>Scenario and operating assumptions</div>
-        </div>
-        <button id='toggleSidebar' class='sidebar-toggle' aria-label='Collapse sidebar'>⟨</button>
-      </div>
-
-      <section class='sidebar-section'>
-        <h3>Market Inputs</h3>
-        
-    <label class='control-row'>
-      <div class='control-label'>Exchange rate<span class='tooltip' data-tooltip='The naira to US dollar rate used to convert imported dairy costs into local terms. A weaker naira raises landed import costs even when global milk prices are stable.' aria-label='The naira to US dollar rate used to convert imported dairy costs into local terms. A weaker naira raises landed import costs even when global milk prices are stable.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        <span class='input-prefix'>₦</span>
-        <input id='exchangeRateInput' type='number' value='1387.4475' step='0.01' />
-        <span class='input-suffix'>/USD</span>
-      </div>
-    </label>
-    
-        
-    <label class='control-row'>
-      <div class='control-label'>Tariff<span class='tooltip' data-tooltip='The customs duty applied to imported dairy product value. Raising this increases import parity and can improve the relative position of domestic milk.' aria-label='The customs duty applied to imported dairy product value. Raising this increases import parity and can improve the relative position of domestic milk.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        
-        <input id='tariffInput' type='number' value='15.0' step='0.1' />
-        <span class='input-suffix'>%</span>
-      </div>
-    </label>
-    
-        
-    <label class='control-row'>
-      <div class='control-label'>Shipping cost<span class='tooltip' data-tooltip='Estimated shipping and insurance added to the free-on-board milk powder price. This captures transport friction between global supply and Nigerian landed cost.' aria-label='Estimated shipping and insurance added to the free-on-board milk powder price. This captures transport friction between global supply and Nigerian landed cost.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        
-        <input id='shippingInput' type='number' value='8.0' step='0.1' />
-        <span class='input-suffix'>%</span>
-      </div>
-    </label>
-    
-        
-    <label class='control-row'>
-      <div class='control-label'>Global milk price<span class='tooltip' data-tooltip='The benchmark world whole milk powder price used as the starting point for landed-cost calculations. It is a market signal, not a farm-gate Nigerian milk price.' aria-label='The benchmark world whole milk powder price used as the starting point for landed-cost calculations. It is a market signal, not a farm-gate Nigerian milk price.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        <span class='input-prefix'>$</span>
-        <input id='globalMilkPriceInput' type='number' value='3654.0' step='1' />
-        <span class='input-suffix'>/MT</span>
-      </div>
-    </label>
-    
-      </section>
-
-      <section class='sidebar-section'>
-        <h3>Farm Inputs</h3>
-        
-    <label class='control-row'>
-      <div class='control-label'>Feed cost<span class='tooltip' data-tooltip='The feed share of raw-milk production cost per litre. This is usually the largest controllable cost driver in the farm economics model.' aria-label='The feed share of raw-milk production cost per litre. This is usually the largest controllable cost driver in the farm economics model.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        <span class='input-prefix'>₦</span>
-        <input id='feedCostInput' type='number' value='450' step='1' />
-        <span class='input-suffix'>/L</span>
-      </div>
-    </label>
-    
-        
-    <label class='control-row'>
-      <div class='control-label'>Labour cost<span class='tooltip' data-tooltip='The labour cost allocated to each litre of milk. It reflects staffing efficiency, wage levels, and how output is spread across the herd.' aria-label='The labour cost allocated to each litre of milk. It reflects staffing efficiency, wage levels, and how output is spread across the herd.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        <span class='input-prefix'>₦</span>
-        <input id='labourCostInput' type='number' value='60' step='1' />
-        <span class='input-suffix'>/L</span>
-      </div>
-    </label>
-    
-        
-    <label class='control-row'>
-      <div class='control-label'>Milk yield per cow<span class='tooltip' data-tooltip='Average litres produced per cow per day in the current scenario. Higher yield usually lowers cost per litre by spreading fixed and semi-fixed costs.' aria-label='Average litres produced per cow per day in the current scenario. Higher yield usually lowers cost per litre by spreading fixed and semi-fixed costs.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        
-        <input id='yieldInput' type='number' value='8' step='0.1' />
-        <span class='input-suffix'>L/day</span>
-      </div>
-    </label>
-    
-        
-    <label class='control-row'>
-      <div class='control-label'>Herd size<span class='tooltip' data-tooltip='The number of producing cows included in the scenario. This scales herd-level profit and helps test whether economics improve at larger operating size.' aria-label='The number of producing cows included in the scenario. This scales herd-level profit and helps test whether economics improve at larger operating size.' tabindex='0'>i</span></div>
-      <div class='input-wrap'>
-        
-        <input id='herdSizeInput' type='number' value='20' step='1' />
-        <span class='input-suffix'>cows</span>
-      </div>
-    </label>
-    
-      </section>
-
-      <section class='sidebar-section'>
-        <h3>Scenario Tools</h3>
-        <div class='button-stack'>
-          <button class='action-btn secondary' id='resetScenarioBtn'>Reset scenario</button>
-          <button class='action-btn' id='saveScenarioBtn'>Save scenario</button>
-          <button class='action-btn accent' id='exportResultsBtn'>Export results</button>
-        </div>
-        <div class='sidebar-note'>The GUI consumes existing outputs and recalculates presentation-layer scenario views in the browser.</div>
-      </section>
-    </aside>
     
     <main class='main-content'>
-      <section class='content-view active' id='market-signals'>
+      <section class='content-view' id='market-signals'>
         <div class='section-head'><div><h2>Market Signals</h2><p>External price signals and import economics separated from herd analytics.</p></div></div>
         <div class='kpi-grid'>
             <section class='kpi-card'>
-              <div class='kpi-label'>Global WMP price<span class='tooltip' data-tooltip='The global whole milk powder benchmark currently feeding the market model. It is useful as an external reference point for import exposure, not a direct domestic selling price.' aria-label='The global whole milk powder benchmark currently feeding the market model. It is useful as an external reference point for import exposure, not a direct domestic selling price.' tabindex='0'>i</span></div>
+              <div class='kpi-label'>Global WMP price<span class='tooltip' data-tooltip='CME Class III Milk Futures (DC=F) via Yahoo Finance. Updated daily on market open. A global benchmark for dairy import cost pressure — not a direct Nigerian farm-gate price.' aria-label='CME Class III Milk Futures (DC=F) via Yahoo Finance. Updated daily on market open.' tabindex='0'>i</span></div>
               <div class='kpi-value' id='kpiGlobalWmp'>—</div>
               <div class='kpi-subtext' id='kpiGlobalWmp_sub'></div>
             </section>
             
             <section class='kpi-card'>
-              <div class='kpi-label'>Import parity price<span class='tooltip' data-tooltip='Estimated Nigerian landed cost of imported milk equivalent after FX, shipping, tariff, and reconstitution assumptions. This is the core comparator against domestic production cost.' aria-label='Estimated Nigerian landed cost of imported milk equivalent after FX, shipping, tariff, and reconstitution assumptions. This is the core comparator against domestic production cost.' tabindex='0'>i</span></div>
+              <div class='kpi-label'>Import parity price<span class='tooltip' data-tooltip='Calculated live: FAO Dairy Price Index (fao.org, monthly) × CBN USD/NGN rate (Yahoo Finance, daily), plus 8% CIF freight and 15% import tariff, divided by 8L reconstitution yield per kg WMP. Refreshed every 6 hours.' aria-label='Calculated from FAO Dairy Price Index × USD/NGN rate. Refreshed every 6 hours.' tabindex='0'>i</span></div>
               <div class='kpi-value' id='kpiImportParity'>—</div>
               <div class='kpi-subtext' id='kpiImportParity_sub'></div>
             </section>
             
             <section class='kpi-card'>
-              <div class='kpi-label'>Exchange rate<span class='tooltip' data-tooltip='The exchange rate currently used to translate dollar-denominated imported dairy costs into naira. Sudden FX moves can change competitiveness faster than farm performance does.' aria-label='The exchange rate currently used to translate dollar-denominated imported dairy costs into naira. Sudden FX moves can change competitiveness faster than farm performance does.' tabindex='0'>i</span></div>
+              <div class='kpi-label'>Exchange rate<span class='tooltip' data-tooltip='USD/NGN spot rate via Yahoo Finance (USDNGN=X), updated daily. Reflects the interbank market rate. FX moves directly drive import parity — a 10% naira depreciation raises landed dairy costs by ~10%.' aria-label='USD/NGN spot rate via Yahoo Finance, updated daily.' tabindex='0'>i</span></div>
               <div class='kpi-value' id='kpiExchangeRate'>—</div>
               <div class='kpi-subtext' id='kpiExchangeRate_sub'></div>
             </section>
             
             <section class='kpi-card'>
-              <div class='kpi-label'>Nigerian retail milk price<span class='tooltip' data-tooltip='A retail-equivalent milk price inferred from NBS tracked products. It is directionally useful but includes processing, packaging, distribution, and brand margin.' aria-label='A retail-equivalent milk price inferred from NBS tracked products. It is directionally useful but includes processing, packaging, distribution, and brand margin.' tabindex='0'>i</span></div>
+              <div class='kpi-label'>Nigerian retail milk price<span class='tooltip' data-tooltip='Source: NBS Selected Food Prices Watch (nigerianstat.gov.ng). Estimated ₦/litre from 170g evaporated milk tin price (÷ 0.34). NBS publishes with a ~2 month lag; latest available reading is Oct 2024.' aria-label='NBS Selected Food Prices Watch. Latest reading Oct 2024 — updated manually when NBS publishes.' tabindex='0'>i</span></div>
               <div class='kpi-value' id='kpiRetail'>—</div>
               <div class='kpi-subtext' id='kpiRetail_sub'></div>
             </section>
@@ -256,7 +140,7 @@
       <div class='panel-header'>
         <div>
           <h3>Import parity vs retail price</h3>
-          <p>Imported benchmark versus Nigerian retail equivalent.</p>
+          <p>Imported benchmark versus Nigerian retail equivalent. Import parity is live and updates automatically. NBS retail data (dashed) last published Oct 2024 — NBS no longer includes milk in its monthly food price watch.</p>
         </div>
       </div>
       <div class='chart-wrap' style='height:300px'>
@@ -296,117 +180,101 @@
     
       </section>
 
-      <section class='content-view' id='farm-economics'>
-        <div class='section-head'><div><h2>Farm Economics</h2><p>Domestic production economics with scenario-led planning inputs.</p></div></div>
-        <div class='kpi-grid'>
-            <section class='kpi-card'>
-              <div class='kpi-label'>Cost per litre<span class='tooltip' data-tooltip='Scenario-based estimate of raw-milk production cost per litre at farm level. It excludes downstream processing and retail margin, so use it as a farm benchmark rather than shelf price.' aria-label='Scenario-based estimate of raw-milk production cost per litre at farm level. It excludes downstream processing and retail margin, so use it as a farm benchmark rather than shelf price.' tabindex='0'>i</span></div>
-              <div class='kpi-value' id='kpiCostPerLitre'>—</div>
-              <div class='kpi-subtext' id='kpiCostPerLitre_sub'></div>
-            </section>
-            
-            <section class='kpi-card'>
-              <div class='kpi-label'>Margin vs imports<span class='tooltip' data-tooltip='Import parity minus domestic cost per litre. Positive values suggest local raw milk is structurally cheaper than imported equivalent under current assumptions.' aria-label='Import parity minus domestic cost per litre. Positive values suggest local raw milk is structurally cheaper than imported equivalent under current assumptions.' tabindex='0'>i</span></div>
-              <div class='kpi-value' id='kpiMarginVsImports'>—</div>
-              <div class='kpi-subtext' id='kpiMarginVsImports_sub'></div>
-            </section>
-            
-            <section class='kpi-card'>
-              <div class='kpi-label'>Profit per cow<span class='tooltip' data-tooltip='Approximate daily profit contribution per cow using the current scenario. It is a planning indicator, not a full accounting result.' aria-label='Approximate daily profit contribution per cow using the current scenario. It is a planning indicator, not a full accounting result.' tabindex='0'>i</span></div>
-              <div class='kpi-value' id='kpiProfitPerCow'>—</div>
-              <div class='kpi-subtext' id='kpiProfitPerCow_sub'></div>
-            </section>
-            
-            <section class='kpi-card'>
-              <div class='kpi-label'>Profit per herd<span class='tooltip' data-tooltip='Approximate daily herd profit under the current assumptions. This is useful for sensitivity testing, especially around feed, yield, and FX.' aria-label='Approximate daily herd profit under the current assumptions. This is useful for sensitivity testing, especially around feed, yield, and FX.' tabindex='0'>i</span></div>
-              <div class='kpi-value' id='kpiProfitPerHerd'>—</div>
-              <div class='kpi-subtext' id='kpiProfitPerHerd_sub'></div>
-            </section>
-            </div>
-        <div class='grid-two'>
-          
-    <section class='panel'>
-      <div class='panel-header'>
-        <div>
-          <h3>Cost breakdown</h3>
-          <p>Scenario-adjusted domestic cost components.</p>
-        </div>
-      </div>
-      <div class='chart-wrap' style='height:280px'>
-        <canvas id='farmCostBreakdownChart'></canvas>
-      </div>
-    </section>
-    
-          
-    <section class='panel'>
-      <div class='panel-header'>
-        <div>
-          <h3>Sensitivity to feed price</h3>
-          <p>Daily herd profit response to feed-cost movement.</p>
-        </div>
-      </div>
-      <div class='chart-wrap' style='height:280px'>
-        <canvas id='farmFeedSensitivityChart'></canvas>
-      </div>
-    </section>
-    
-        </div>
-        <div class='grid-two'>
-          
-    <section class='panel'>
-      <div class='panel-header'>
-        <div>
-          <h3>Yield vs profitability</h3>
-          <p>Daily herd economics across yield assumptions.</p>
-        </div>
-      </div>
-      <div class='chart-wrap' style='height:280px'>
-        <canvas id='farmYieldProfitChart'></canvas>
-      </div>
-    </section>
-    
-          
-    <section class='panel'>
-      <div class='panel-header'>
-        <div>
-          <h3>Device status snapshot</h3>
-          <p>Operational readiness view for future telemetry rollout.</p>
-        </div>
-      </div>
-      <div class='table-wrap'>
-        <table>
-          <thead><tr><th>Farm</th><th>Animal</th><th>Device</th><th>Battery</th><th>Signal</th><th>Health alert</th></tr></thead>
-          <tbody id='deviceStatusTable'></tbody>
-        </table>
-      </div>
-    </section>
-    
-        </div>
-      </section>
 
-      
-      <section class='content-view' id='herd-intelligence'>
-        <div class='section-head'><div><h2>Herd Intelligence</h2><p>Operational telemetry layer built from integrated Danone BODIT sensor data.</p></div></div>
+      <!-- ═══════════════════════════════ FARM OVERVIEW ═══════════════════════════════ -->
+      <section class='content-view active' id='farm-overview'>
+
+        <!-- 0. Farm selector -->
+        <div style='display:flex;align-items:center;gap:1rem;padding:1rem 0 1.5rem'>
+          <label for='farmSelector' style='font-weight:700;font-size:1rem;white-space:nowrap'>Select farm</label>
+          <select id='farmSelector' style='flex:1;max-width:420px;padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;font-size:0.95rem;cursor:pointer'>
+            <option value=''>— Loading farms… —</option>
+          </select>
+          <span id='farmSelectorMeta' style='font-size:0.8rem;color:#6b7280'></span>
+        </div>
+
+        <!-- 1. Registered Farms -->
+        <div class='section-head'><div><h2>Registered Farms</h2><p>All active farms — click a card to drill into that farm.</p></div></div>
+        <div id='farmCardsGrid' style='display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.25rem;margin-bottom:2rem'></div>
+
+        <!-- 2. Comparative Analysis -->
+        <div class='section-head' style='margin-top:1rem'><div><h2>Comparative Analysis</h2><p>Key performance metrics across all farms.</p></div></div>
+        <div class='grid-two'>
+          <section class='panel'>
+            <div class='panel-header'><div><h3>Average Activity Rate (%)</h3></div></div>
+            <div class='chart-wrap' style='height:260px'><canvas id='compareActivityChart'></canvas></div>
+          </section>
+          <section class='panel'>
+            <div class='panel-header'><div><h3>Average Rumination (min/day)</h3></div></div>
+            <div class='chart-wrap' style='height:260px'><canvas id='compareRuminationChart'></canvas></div>
+          </section>
+        </div>
+        <div class='grid-two' style='margin-top:1rem'>
+          <section class='panel'>
+            <div class='panel-header'><div><h3>Health Alerts</h3></div></div>
+            <div class='chart-wrap' style='height:260px'><canvas id='compareHealthChart'></canvas></div>
+          </section>
+          <section class='panel'>
+            <div class='panel-header'><div><h3>Data Quality (%)</h3></div></div>
+            <div class='chart-wrap' style='height:260px'><canvas id='compareQualityChart'></canvas></div>
+          </section>
+        </div>
+
+        <!-- 3. Herd Intelligence -->
+        <div class='section-head' style='margin-top:2rem'><div><h2>Herd Intelligence</h2><p>Operational telemetry layer built from integrated Danone BODIT sensor data.</p></div></div>
         <div class='kpi-grid'>
           <section class='kpi-card'>
-            <div class='kpi-label'>Animals detected<span class='tooltip' data-tooltip='Number of distinct animals identified after reconciling both telemetry files. This confirms herd coverage rather than total sensor events.' aria-label='Number of distinct animals identified after reconciling both telemetry files. This confirms herd coverage rather than total sensor events.' tabindex='0'>i</span></div>
+            <div class='kpi-label'>Animals detected</div>
             <div class='kpi-value' id='herdAnimals'>—</div>
             <div class='kpi-subtext' id='herdAnimals_sub'></div>
           </section>
           <section class='kpi-card'>
-            <div class='kpi-label'>Records loaded<span class='tooltip' data-tooltip='Total usable telemetry records after removing duplicates and aligning overlapping files. This gives the effective evidence base for herd analytics.' aria-label='Total usable telemetry records after removing duplicates and aligning overlapping files. This gives the effective evidence base for herd analytics.' tabindex='0'>i</span></div>
+            <div class='kpi-label'>Records loaded</div>
             <div class='kpi-value' id='herdRecords'>—</div>
             <div class='kpi-subtext' id='herdRecords_sub'></div>
           </section>
           <section class='kpi-card'>
-            <div class='kpi-label'>Date range<span class='tooltip' data-tooltip='The monitoring window covered by the merged telemetry data. Wider coverage improves baseline quality and makes trend interpretation more reliable.' aria-label='The monitoring window covered by the merged telemetry data. Wider coverage improves baseline quality and makes trend interpretation more reliable.' tabindex='0'>i</span></div>
+            <div class='kpi-label'>Date range</div>
             <div class='kpi-value' id='herdDateRange'>—</div>
             <div class='kpi-subtext' id='herdDateRange_sub'></div>
           </section>
           <section class='kpi-card'>
-            <div class='kpi-label'>Variables available<span class='tooltip' data-tooltip='Count of standardised telemetry fields available for analysis after harmonising the source files. More variables enable stronger alert logic and richer herd views.' aria-label='Count of standardised telemetry fields available for analysis after harmonising the source files. More variables enable stronger alert logic and richer herd views.' tabindex='0'>i</span></div>
+            <div class='kpi-label'>Variables available</div>
             <div class='kpi-value' id='herdVariables'>—</div>
             <div class='kpi-subtext' id='herdVariables_sub'></div>
+          </section>
+        </div>
+        <div class='grid-two'>
+          <section class='panel'>
+            <div class='panel-header'><div><h3>Daily milk yield</h3><p>Average litres per cow per day for selected farm.</p></div></div>
+            <div class='chart-wrap' style='height:300px'><canvas id='herdMilkYieldChart'></canvas></div>
+          </section>
+          <section class='panel'>
+            <div class='panel-header'>
+              <div><h3>Milk production summary</h3><p>Key yield stats for selected farm.</p></div>
+            </div>
+            <div class='kpi-grid' style='grid-template-columns:repeat(2,1fr);margin-bottom:0;gap:10px;padding-top:4px'>
+              <div class='kpi-card' style='padding:14px'>
+                <div class='kpi-label'>Avg yield</div>
+                <div class='kpi-value' style='font-size:22px' id='milkAvgYield'>—</div>
+                <div class='kpi-subtext'>L / cow / day</div>
+              </div>
+              <div class='kpi-card' style='padding:14px'>
+                <div class='kpi-label'>Cows tracked</div>
+                <div class='kpi-value' style='font-size:22px' id='milkCowCount'>—</div>
+                <div class='kpi-subtext'>producing animals</div>
+              </div>
+              <div class='kpi-card' style='padding:14px'>
+                <div class='kpi-label'>Date range</div>
+                <div class='kpi-value' style='font-size:14px;line-height:1.4' id='milkDateRange'>—</div>
+                <div class='kpi-subtext'>monitoring period</div>
+              </div>
+              <div class='kpi-card' style='padding:14px'>
+                <div class='kpi-label'>Herd daily total</div>
+                <div class='kpi-value' style='font-size:22px' id='milkHerdTotal'>—</div>
+                <div class='kpi-subtext'>L / day (est.)</div>
+              </div>
+            </div>
           </section>
         </div>
         <div class='grid-two'>
@@ -431,44 +299,54 @@
         </div>
         <div class='grid-two'>
           <section class='panel'>
-            <div class='panel-header'><div><h3>Validation summary</h3><p>Automated telemetry checks before dashboard rendering.</p></div></div>
-            <div class='table-wrap'>
-              <table>
-                <thead><tr><th>Check</th><th>Value</th></tr></thead>
-                <tbody id='herdValidationTable'></tbody>
-              </table>
-            </div>
-          </section>
-          <section class='panel'>
-            <div class='panel-header'><div><h3>File comparison result</h3><p>How the Excel and CSV files were reconciled.</p></div></div>
-            <div class='table-wrap'>
-              <table>
-                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
-                <tbody id='herdComparisonTable'></tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-        <div class='grid-two'>
-          <section class='panel'>
             <div class='panel-header'><div><h3>Estrus candidates</h3><p>Prototype ranking from activity and rumination deviation signals.</p></div></div>
             <div class='table-wrap'>
-              <table>
-                <thead><tr><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr></thead>
-                <tbody id='estrusAlertsTable'></tbody>
-              </table>
+              <table><thead><tr><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr></thead><tbody id='estrusAlertsTable'></tbody></table>
             </div>
           </section>
           <section class='panel'>
             <div class='panel-header'><div><h3>Health monitoring</h3><p>Prototype watch-list from behavioural drift and coverage checks.</p></div></div>
             <div class='table-wrap'>
-              <table>
-                <thead><tr><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr></thead>
-                <tbody id='healthAlertsTable'></tbody>
-              </table>
+              <table><thead><tr><th>Animal</th><th>Date</th><th>Score</th><th>Status</th></tr></thead><tbody id='healthAlertsTable'></tbody></table>
             </div>
           </section>
         </div>
+
+        <!-- 4. Individual Animal Behaviour -->
+        <div class='section-head' style='margin-top:2rem'><div><h2>Individual Animal Behaviour</h2><p>Select an animal to explore its daily behavioural time series.</p></div></div>
+        <section class='panel'>
+          <div class='panel-header'>
+            <div><h3>Animal profile</h3><p>Daily behavioural metrics for the selected animal</p></div>
+            <select id='animalSelector' style='padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.9rem;cursor:pointer'>
+              <option value=''>— Select animal —</option>
+            </select>
+          </div>
+          <div id='animalLoading' style='display:none;padding:1rem;color:#6b7280'>Loading...</div>
+          <div id='animalCharts' style='display:none'>
+            <div class='grid-two' style='margin-top:1rem'>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalActivityChart'></canvas></div>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalRuminationChart'></canvas></div>
+            </div>
+            <div class='grid-two' style='margin-top:1rem'>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalEatingChart'></canvas></div>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalRestingChart'></canvas></div>
+            </div>
+            <div class='grid-two' style='margin-top:1rem'>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalStandingChart'></canvas></div>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalSittingChart'></canvas></div>
+            </div>
+            <div class='grid-two' style='margin-top:1rem'>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalCoughingChart'></canvas></div>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalHeatChart'></canvas></div>
+            </div>
+            <div class='grid-two' style='margin-top:1rem'>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalMountingChart'></canvas></div>
+              <div class='chart-wrap' style='height:280px'><canvas id='animalDataQualityChart'></canvas></div>
+            </div>
+          </div>
+          <div id='animalEmpty' style='padding:1rem;color:#6b7280'>Select an animal above to view its behaviour.</div>
+        </section>
+
       </section>
 
 
@@ -526,39 +404,44 @@
   </div>
 </div>
 <script>
-  const dashboardData = {
-    payload: {"pulled_at": "2026-03-06T07:00:10.500808+00:00", "country": "Nigeria", "context": {"dairy_import_dependency": "~95% of consumption is imported", "main_imports": ["Whole Milk Powder (WMP)", "Skim Milk Powder (SMP)", "Butter"], "local_production_mt_yr": "600,000\u2013700,000 MT (smallholder/pastoral)", "local_milk_price_range_ngn_per_litre": "350\u20131,500", "sources_note": "Global commodity prices (FAO FPI, futures) are the primary signal for Nigeria's dairy import costs. FAOSTAT gives national production/trade stats."}, "sources": {"fao_food_price_index": "https://www.fao.org/media/docs/worldfoodsituationlibraries/default-document-library/food_price_indices_data_csv_feb.csv", "owid_production": "https://ourworldindata.org/grapher", "un_comtrade_trade": "https://comtradeapi.un.org/public/v1/preview/C/A/HS", "nbs_food_prices": "https://nigerianstat.gov.ng/resource/", "futures": "Yahoo Finance (yfinance) \u2014 CME Group"}, "run_summary": {"total_sources": 7, "succeeded": 7, "failed": 0, "all_ok": true}, "fetch_log": [{"source": "fao_dairy_price_index", "status": "ok", "duration_s": 0.19, "fetched_at": "2026-03-06T07:00:10.501807+00:00", "error": null}, {"source": "owid/nigeria_production", "status": "ok", "duration_s": 1.03, "fetched_at": "2026-03-06T07:00:10.688813+00:00", "error": null}, {"source": "comtrade/nigeria_dairy_imports", "status": "ok", "duration_s": 3.45, "fetched_at": "2026-03-06T07:00:11.718514+00:00", "error": null}, {"source": "nbs/retail_milk_prices", "status": "ok", "duration_s": 115.87, "fetched_at": "2026-03-06T07:00:15.173582+00:00", "error": null}, {"source": "forex/usdngn_monthly", "status": "ok", "duration_s": 0.48, "fetched_at": "2026-03-06T07:02:11.044818+00:00", "error": null}, {"source": "futures/yahoo_finance", "status": "ok", "duration_s": 0.54, "fetched_at": "2026-03-06T07:02:11.528666+00:00", "error": null}, {"source": "exchange_rate/cbn_nfem", "status": "ok", "duration_s": 3.19, "fetched_at": "2026-03-06T07:02:12.070835+00:00", "error": null}], "fao_dairy_price_index": {"note": "Index (2014-2016 = 100). Reflects global dairy import cost pressure on Nigeria.", "base": "2014-2016 = 100", "latest": {"date": "2026-01", "dairy_price_index": 121.8, "food_price_index": 123.9}, "history": [{"date": "2023-02", "dairy_price_index": 138.7, "food_price_index": 130.7}, {"date": "2023-03", "dairy_price_index": 135.3, "food_price_index": 128.0}, {"date": "2023-04", "dairy_price_index": 129.3, "food_price_index": 128.4}, {"date": "2023-05", "dairy_price_index": 121.7, "food_price_index": 124.5}, {"date": "2023-06", "dairy_price_index": 119.9, "food_price_index": 123.0}, {"date": "2023-07", "dairy_price_index": 119.1, "food_price_index": 124.4}, {"date": "2023-08", "dairy_price_index": 114.3, "food_price_index": 121.8}, {"date": "2023-09", "dairy_price_index": 112.0, "food_price_index": 121.7}, {"date": "2023-10", "dairy_price_index": 114.6, "food_price_index": 120.7}, {"date": "2023-11", "dairy_price_index": 116.5, "food_price_index": 120.6}, {"date": "2023-12", "dairy_price_index": 118.7, "food_price_index": 119.1}, {"date": "2024-01", "dairy_price_index": 118.7, "food_price_index": 117.6}, {"date": "2024-02", "dairy_price_index": 120.7, "food_price_index": 117.4}, {"date": "2024-03", "dairy_price_index": 124.0, "food_price_index": 118.9}, {"date": "2024-04", "dairy_price_index": 123.8, "food_price_index": 119.2}, {"date": "2024-05", "dairy_price_index": 126.3, "food_price_index": 120.5}, {"date": "2024-06", "dairy_price_index": 127.9, "food_price_index": 121.0}, {"date": "2024-07", "dairy_price_index": 127.8, "food_price_index": 120.9}, {"date": "2024-08", "dairy_price_index": 131.3, "food_price_index": 121.7}, {"date": "2024-09", "dairy_price_index": 136.5, "food_price_index": 124.6}, {"date": "2024-10", "dairy_price_index": 138.6, "food_price_index": 126.9}, {"date": "2024-11", "dairy_price_index": 139.8, "food_price_index": 127.7}, {"date": "2024-12", "dairy_price_index": 141.2, "food_price_index": 127.3}, {"date": "2025-01", "dairy_price_index": 143.1, "food_price_index": 124.7}, {"date": "2025-02", "dairy_price_index": 147.7, "food_price_index": 126.6}, {"date": "2025-03", "dairy_price_index": 148.7, "food_price_index": 127.2}, {"date": "2025-04", "dairy_price_index": 151.7, "food_price_index": 128.2}, {"date": "2025-05", "dairy_price_index": 153.6, "food_price_index": 127.1}, {"date": "2025-06", "dairy_price_index": 155.5, "food_price_index": 128.1}, {"date": "2025-07", "dairy_price_index": 154.6, "food_price_index": 129.8}, {"date": "2025-08", "dairy_price_index": 152.2, "food_price_index": 130.0}, {"date": "2025-09", "dairy_price_index": 147.2, "food_price_index": 128.6}, {"date": "2025-10", "dairy_price_index": 141.7, "food_price_index": 126.4}, {"date": "2025-11", "dairy_price_index": 136.2, "food_price_index": 125.2}, {"date": "2025-12", "dairy_price_index": 128.2, "food_price_index": 124.3}, {"date": "2026-01", "dairy_price_index": 121.8, "food_price_index": 123.9}], "total_months_available": 433}, "nigeria_production": {"source": "Our World in Data (FAOSTAT-sourced)", "note": "Production figures are FAO estimates; recent years may be preliminary.", "units": {"milk_production_tonnes": "tonnes/year", "milk_supply_per_capita_kg": "kg/person/year", "milk_yield_per_animal_kg": "kg/animal/year"}, "latest_year": 2024, "timeline": [{"year": 2015, "milk_production_tonnes": 513116.44, "milk_supply_per_capita_kg": 7.63, "milk_yield_per_animal_kg": 237.5448}, {"year": 2016, "milk_production_tonnes": 507950.22, "milk_supply_per_capita_kg": 7.44, "milk_yield_per_animal_kg": 237.9029}, {"year": 2017, "milk_production_tonnes": 510567.5, "milk_supply_per_capita_kg": 7.07, "milk_yield_per_animal_kg": 237.5625}, {"year": 2018, "milk_production_tonnes": 514239.8, "milk_supply_per_capita_kg": 6.85, "milk_yield_per_animal_kg": 237.3529}, {"year": 2019, "milk_production_tonnes": 517077.12, "milk_supply_per_capita_kg": 6.21, "milk_yield_per_animal_kg": 237.0449}, {"year": 2020, "milk_production_tonnes": 519811.34, "milk_supply_per_capita_kg": 6.39, "milk_yield_per_animal_kg": 236.422}, {"year": 2021, "milk_production_tonnes": 523324.4, "milk_supply_per_capita_kg": 7.61, "milk_yield_per_animal_kg": 236.2435}, {"year": 2022, "milk_production_tonnes": 525458.0, "milk_supply_per_capita_kg": 4.98, "milk_yield_per_animal_kg": 236.1831}, {"year": 2023, "milk_production_tonnes": 526502.2, "milk_supply_per_capita_kg": 4.07, "milk_yield_per_animal_kg": 236.2148}, {"year": 2024, "milk_production_tonnes": 527765.06, "milk_yield_per_animal_kg": 236.2284}]}, "nigeria_dairy_trade": {"source": "UN Comtrade public preview API", "note": "Annual data; typically 1-2 year publication lag. World totals only.", "flow": "Imports (CIF)", "hs_codes": {"0402": "Milk powder / concentrated (WMP, SMP)", "0405": "Butter"}, "timeline": [{"year": 2020, "imports": [{"hs_code": "0402", "description": "Milk powder / concentrated (WMP, SMP)", "net_weight_kg": 270429487.618, "cif_value_usd": 805400129.792}, {"hs_code": "0405", "description": "Butter", "net_weight_kg": 8515264.24, "cif_value_usd": 15807699.38}]}, {"year": 2022, "imports": [{"hs_code": "0402", "description": "Milk powder / concentrated (WMP, SMP)", "net_weight_kg": 84743369.57, "cif_value_usd": 346533854.582}]}], "partial_errors": ["0402/2021: 429 Client Error: Too Many Requests for url: https://comtradeapi.un.org/public/v1/preview/C/A/HS?cmdCode=0402&reporterCode=566&flowCode=M&period=2021", "0402/2023: 429 Client Error: Too Many Requests for url: https://comtradeapi.un.org/public/v1/preview/C/A/HS?cmdCode=0402&reporterCode=566&flowCode=M&period=2023", "0405/2021: 429 Client Error: Too Many Requests for url: https://comtradeapi.un.org/public/v1/preview/C/A/HS?cmdCode=0405&reporterCode=566&flowCode=M&period=2021", "0405/2022: 429 Client Error: Too Many Requests for url: https://comtradeapi.un.org/public/v1/preview/C/A/HS?cmdCode=0405&reporterCode=566&flowCode=M&period=2022", "0405/2023: 429 Client Error: Too Many Requests for url: https://comtradeapi.un.org/public/v1/preview/C/A/HS?cmdCode=0405&reporterCode=566&flowCode=M&period=2023"]}, "nbs_retail_prices": {"source": "National Bureau of Statistics (NBS) \u2014 Selected Food Prices Watch", "note": "National averages across all states. \u20a6/litre is estimated from the 170g evaporated milk tin price, reconstituted 1:1 with water (340ml per tin).", "conversion": "\u20a6/tin \u00f7 0.34 = \u20a6/litre  (170g tin + 170ml water = 340ml reconstituted)", "items_tracked": ["Evaporated tinned milk carnation 170g", "Evaporated tinned milk(peak), 170g"], "latest": {"date": "2024-10", "avg_ngn_per_tin_170g": 899.47, "avg_ngn_per_litre": 2645.5, "n_products": 2}, "timeline": [{"date": "2022-06", "avg_ngn_per_tin_170g": 246.59, "avg_ngn_per_litre": 725.26, "n_products": 2}, {"date": "2022-07", "avg_ngn_per_tin_170g": 254.12, "avg_ngn_per_litre": 747.4, "n_products": 2}, {"date": "2022-08", "avg_ngn_per_tin_170g": 261.75, "avg_ngn_per_litre": 769.84, "n_products": 2}, {"date": "2022-09", "avg_ngn_per_tin_170g": 272.11, "avg_ngn_per_litre": 800.34, "n_products": 2}, {"date": "2022-10", "avg_ngn_per_tin_170g": 290.08, "avg_ngn_per_litre": 853.18, "n_products": 2}, {"date": "2022-11", "avg_ngn_per_tin_170g": 300.52, "avg_ngn_per_litre": 883.88, "n_products": 2}, {"date": "2022-12", "avg_ngn_per_tin_170g": 310.68, "avg_ngn_per_litre": 913.76, "n_products": 2}, {"date": "2023-01", "avg_ngn_per_tin_170g": 323.18, "avg_ngn_per_litre": 950.54, "n_products": 2}, {"date": "2023-02", "avg_ngn_per_tin_170g": 327.07, "avg_ngn_per_litre": 961.98, "n_products": 2}, {"date": "2023-03", "avg_ngn_per_tin_170g": 334.63, "avg_ngn_per_litre": 984.2, "n_products": 2}, {"date": "2023-04", "avg_ngn_per_tin_170g": 343.74, "avg_ngn_per_litre": 1011.0, "n_products": 2}, {"date": "2023-05", "avg_ngn_per_tin_170g": 350.85, "avg_ngn_per_litre": 1031.91, "n_products": 2}, {"date": "2023-06", "avg_ngn_per_tin_170g": 404.38, "avg_ngn_per_litre": 1189.36, "n_products": 2}, {"date": "2023-07", "avg_ngn_per_tin_170g": 443.74, "avg_ngn_per_litre": 1305.12, "n_products": 2}, {"date": "2023-08", "avg_ngn_per_tin_170g": 465.43, "avg_ngn_per_litre": 1368.92, "n_products": 2}, {"date": "2023-09", "avg_ngn_per_tin_170g": 490.08, "avg_ngn_per_litre": 1441.4, "n_products": 2}, {"date": "2023-10", "avg_ngn_per_tin_170g": 492.21, "avg_ngn_per_litre": 1447.67, "n_products": 2}, {"date": "2023-11", "avg_ngn_per_tin_170g": 498.28, "avg_ngn_per_litre": 1465.53, "n_products": 2}, {"date": "2023-12", "avg_ngn_per_tin_170g": 507.69, "avg_ngn_per_litre": 1493.19, "n_products": 2}, {"date": "2024-01", "avg_ngn_per_tin_170g": 504.33, "avg_ngn_per_litre": 1483.33, "n_products": 2}, {"date": "2024-02", "avg_ngn_per_tin_170g": 600.82, "avg_ngn_per_litre": 1767.12, "n_products": 2}, {"date": "2024-03", "avg_ngn_per_tin_170g": 640.4, "avg_ngn_per_litre": 1883.53, "n_products": 2}, {"date": "2024-04", "avg_ngn_per_tin_170g": 684.42, "avg_ngn_per_litre": 2013.01, "n_products": 2}, {"date": "2024-05", "avg_ngn_per_tin_170g": 737.57, "avg_ngn_per_litre": 2169.32, "n_products": 2}, {"date": "2024-06", "avg_ngn_per_tin_170g": 760.88, "avg_ngn_per_litre": 2237.88, "n_products": 2}, {"date": "2024-07", "avg_ngn_per_tin_170g": 799.91, "avg_ngn_per_litre": 2352.69, "n_products": 2}, {"date": "2024-08", "avg_ngn_per_tin_170g": 839.71, "avg_ngn_per_litre": 2469.74, "n_products": 2}, {"date": "2024-09", "avg_ngn_per_tin_170g": 877.11, "avg_ngn_per_litre": 2579.74, "n_products": 2}, {"date": "2024-10", "avg_ngn_per_tin_170g": 899.47, "avg_ngn_per_litre": 2645.5, "n_products": 2}], "partial_errors": null}, "usdngn_monthly_rates": [{"date": "2023-03", "rate": 458.78}, {"date": "2023-04", "rate": 460.8}, {"date": "2023-05", "rate": 460.02}, {"date": "2023-06", "rate": 602.12}, {"date": "2023-07", "rate": 779.31}, {"date": "2023-08", "rate": 765.33}, {"date": "2023-09", "rate": 771.47}, {"date": "2023-10", "rate": 778.78}, {"date": "2023-11", "rate": 808.39}, {"date": "2023-12", "rate": 824.69}, {"date": "2024-01", "rate": 906.69}, {"date": "2024-02", "rate": 1471.25}, {"date": "2024-03", "rate": 1527.72}, {"date": "2024-04", "rate": 1241.16}, {"date": "2024-05", "rate": 1434.46}, {"date": "2024-06", "rate": 1502.46}, {"date": "2024-07", "rate": 1577.51}, {"date": "2024-08", "rate": 1596.54}, {"date": "2024-09", "rate": 1629.19}, {"date": "2024-10", "rate": 1641.42}, {"date": "2024-11", "rate": 1673.83}, {"date": "2024-12", "rate": 1574.69}, {"date": "2025-01", "rate": 1549.48}, {"date": "2025-02", "rate": 1501.25}, {"date": "2025-03", "rate": 1527.42}, {"date": "2025-04", "rate": 1580.85}, {"date": "2025-05", "rate": 1598.64}, {"date": "2025-06", "rate": 1554.22}, {"date": "2025-07", "rate": 1530.57}, {"date": "2025-08", "rate": 1530.88}, {"date": "2025-09", "rate": 1505.21}, {"date": "2025-10", "rate": 1465.6}, {"date": "2025-11", "rate": 1444.07}, {"date": "2025-12", "rate": 1452.0}, {"date": "2026-01", "rate": 1419.91}, {"date": "2026-02", "rate": 1357.97}, {"date": "2026-03", "rate": 1375.43}], "import_parity_history": [{"date": "2023-03", "dairy_fpi": 135.3, "usdngn_rate": 458.78, "import_parity_ngn_per_litre": 289.1}, {"date": "2023-04", "dairy_fpi": 129.3, "usdngn_rate": 460.8, "import_parity_ngn_per_litre": 277.5}, {"date": "2023-05", "dairy_fpi": 121.7, "usdngn_rate": 460.02, "import_parity_ngn_per_litre": 260.75}, {"date": "2023-06", "dairy_fpi": 119.9, "usdngn_rate": 602.12, "import_parity_ngn_per_litre": 336.24}, {"date": "2023-07", "dairy_fpi": 119.1, "usdngn_rate": 779.31, "import_parity_ngn_per_litre": 432.29}, {"date": "2023-08", "dairy_fpi": 114.3, "usdngn_rate": 765.33, "import_parity_ngn_per_litre": 407.43}, {"date": "2023-09", "dairy_fpi": 112.0, "usdngn_rate": 771.47, "import_parity_ngn_per_litre": 402.43}, {"date": "2023-10", "dairy_fpi": 114.6, "usdngn_rate": 778.78, "import_parity_ngn_per_litre": 415.67}, {"date": "2023-11", "dairy_fpi": 116.5, "usdngn_rate": 808.39, "import_parity_ngn_per_litre": 438.63}, {"date": "2023-12", "dairy_fpi": 118.7, "usdngn_rate": 824.69, "import_parity_ngn_per_litre": 455.93}, {"date": "2024-01", "dairy_fpi": 118.7, "usdngn_rate": 906.69, "import_parity_ngn_per_litre": 501.26}, {"date": "2024-02", "dairy_fpi": 120.7, "usdngn_rate": 1471.25, "import_parity_ngn_per_litre": 827.08}, {"date": "2024-03", "dairy_fpi": 124.0, "usdngn_rate": 1527.72, "import_parity_ngn_per_litre": 882.3}, {"date": "2024-04", "dairy_fpi": 123.8, "usdngn_rate": 1241.16, "import_parity_ngn_per_litre": 715.65}, {"date": "2024-05", "dairy_fpi": 126.3, "usdngn_rate": 1434.46, "import_parity_ngn_per_litre": 843.81}, {"date": "2024-06", "dairy_fpi": 127.9, "usdngn_rate": 1502.46, "import_parity_ngn_per_litre": 895.01}, {"date": "2024-07", "dairy_fpi": 127.8, "usdngn_rate": 1577.51, "import_parity_ngn_per_litre": 938.98}, {"date": "2024-08", "dairy_fpi": 131.3, "usdngn_rate": 1596.54, "import_parity_ngn_per_litre": 976.33}, {"date": "2024-09", "dairy_fpi": 136.5, "usdngn_rate": 1629.19, "import_parity_ngn_per_litre": 1035.76}, {"date": "2024-10", "dairy_fpi": 138.6, "usdngn_rate": 1641.42, "import_parity_ngn_per_litre": 1059.59}, {"date": "2024-11", "dairy_fpi": 139.8, "usdngn_rate": 1673.83, "import_parity_ngn_per_litre": 1089.86}, {"date": "2024-12", "dairy_fpi": 141.2, "usdngn_rate": 1574.69, "import_parity_ngn_per_litre": 1035.58}, {"date": "2025-01", "dairy_fpi": 143.1, "usdngn_rate": 1549.48, "import_parity_ngn_per_litre": 1032.71}, {"date": "2025-02", "dairy_fpi": 147.7, "usdngn_rate": 1501.25, "import_parity_ngn_per_litre": 1032.73}, {"date": "2025-03", "dairy_fpi": 148.7, "usdngn_rate": 1527.42, "import_parity_ngn_per_litre": 1057.85}, {"date": "2025-04", "dairy_fpi": 151.7, "usdngn_rate": 1580.85, "import_parity_ngn_per_litre": 1116.94}, {"date": "2025-05", "dairy_fpi": 153.6, "usdngn_rate": 1598.64, "import_parity_ngn_per_litre": 1143.65}, {"date": "2025-06", "dairy_fpi": 155.5, "usdngn_rate": 1554.22, "import_parity_ngn_per_litre": 1125.63}, {"date": "2025-07", "dairy_fpi": 154.6, "usdngn_rate": 1530.57, "import_parity_ngn_per_litre": 1102.09}, {"date": "2025-08", "dairy_fpi": 152.2, "usdngn_rate": 1530.88, "import_parity_ngn_per_litre": 1085.2}, {"date": "2025-09", "dairy_fpi": 147.2, "usdngn_rate": 1505.21, "import_parity_ngn_per_litre": 1031.95}, {"date": "2025-10", "dairy_fpi": 141.7, "usdngn_rate": 1465.6, "import_parity_ngn_per_litre": 967.25}, {"date": "2025-11", "dairy_fpi": 136.2, "usdngn_rate": 1444.07, "import_parity_ngn_per_litre": 916.05}, {"date": "2025-12", "dairy_fpi": 128.2, "usdngn_rate": 1452.0, "import_parity_ngn_per_litre": 866.98}, {"date": "2026-01", "dairy_fpi": 121.8, "usdngn_rate": 1419.91, "import_parity_ngn_per_litre": 805.49}], "domestic_production_cost": {"note": "Indicative farm-gate cost for raw milk production in Nigeria (smallholder / semi-commercial, concentrate feeding system). Does not include processing, pasteurisation, packaging, or retail margin.", "unit": "NGN per litre (raw milk, farm gate)", "components": {"feed": {"low": 400, "high": 500, "midpoint": 450, "basis": "Concentrate feed ~\u20a6350/kg \u00d7 3\u20134 kg/cow/day \u00f7 5\u20138 L/cow/day yield", "pct_of_total": "60\u201370%"}, "labour": {"low": 50, "high": 70, "midpoint": 60, "basis": "Worker \u20a680,000\u2013100,000/month managing 15\u201320 cows \u00d7 30 days \u00f7 milk yield", "pct_of_total": "~10%"}, "veterinary": {"low": 20, "high": 30, "midpoint": 25, "basis": "Vaccines, medications, routine health visits", "pct_of_total": "~5%"}, "overhead": {"low": 30, "high": 50, "midpoint": 40, "basis": "Water, transport to collection point, housing depreciation", "pct_of_total": "~7%"}}, "total": {"low": 500, "high": 650, "midpoint": 575}, "edit_note": "To update these assumptions, edit DOMESTIC_COST_ASSUMPTIONS in dairy_market_data.py and re-run the script."}, "futures": {"class_iii_milk": {"ticker": "DC=F", "description": "CME Class III Milk Futures (global benchmark; Nigeria imports priced on WMP/SMP spot)", "unit": "USD/cwt", "contract": "Class III Milk Futures,Mar-2026", "date": "2026-03-06", "open": 17.16, "high": 17.22, "low": 17.03, "close": 17.03, "volume": 22, "currency": "USD", "history_30d": [{"date": "2026-01-30", "close": 14.62}, {"date": "2026-02-02", "close": 14.62}, {"date": "2026-02-03", "close": 14.59}, {"date": "2026-02-04", "close": 15.45}, {"date": "2026-02-05", "close": 15.51}, {"date": "2026-02-06", "close": 15.38}, {"date": "2026-02-09", "close": 15.22}, {"date": "2026-02-10", "close": 15.17}, {"date": "2026-02-11", "close": 15.12}, {"date": "2026-02-12", "close": 15.06}, {"date": "2026-02-13", "close": 15.06}, {"date": "2026-02-17", "close": 15.06}, {"date": "2026-02-18", "close": 15.07}, {"date": "2026-02-19", "close": 15.07}, {"date": "2026-02-20", "close": 15.02}, {"date": "2026-02-23", "close": 15.02}, {"date": "2026-02-24", "close": 15.01}, {"date": "2026-02-25", "close": 15.0}, {"date": "2026-02-26", "close": 14.93}, {"date": "2026-02-27", "close": 14.94}, {"date": "2026-03-02", "close": 14.92}, {"date": "2026-03-03", "close": 14.91}, {"date": "2026-03-04", "close": 16.57}, {"date": "2026-03-05", "close": 16.47}, {"date": "2026-03-06", "close": 17.03}]}}, "exchange_rate": {"source": "Central Bank of Nigeria \u2014 NFEM (Nigerian Foreign Exchange Market)", "rate_type": "NFEM weighted average (USD/NGN)", "note": "NFEM is the officially recognised interbank rate; used for import LC settlement.", "latest": {"date": "2026-03-05", "closing_rate": 1388.0, "weighted_avg": 1387.4475, "simple_avg": 1387.8597, "highest": 1392.0, "lowest": 1385.5}, "history_30d": [{"date": "2026-02-10", "closing_rate": 1349.5, "weighted_avg": 1351.0205, "simple_avg": 1351.0554, "highest": 1354.0, "lowest": 1349.3}, {"date": "2026-02-11", "closing_rate": 1350.0, "weighted_avg": 1348.9529, "simple_avg": 1348.8069, "highest": 1351.5, "lowest": 1345.0}, {"date": "2026-02-12", "closing_rate": 1355.0, "weighted_avg": 1353.6556, "simple_avg": 1354.0747, "highest": 1357.0, "lowest": 1350.0}, {"date": "2026-02-13", "closing_rate": 1358.0, "weighted_avg": 1355.4181, "simple_avg": 1355.4474, "highest": 1358.0, "lowest": 1353.0}, {"date": "2026-02-16", "closing_rate": 1344.0, "weighted_avg": 1347.7789, "simple_avg": 1348.1149, "highest": 1353.0, "lowest": 1342.5}, {"date": "2026-02-17", "closing_rate": 1337.0, "weighted_avg": 1335.958, "simple_avg": 1334.6334, "highest": 1344.0, "lowest": 1318.0}, {"date": "2026-02-18", "closing_rate": 1340.0, "weighted_avg": 1338.1066, "simple_avg": 1337.1657, "highest": 1340.0, "lowest": 1328.0}, {"date": "2026-02-19", "closing_rate": 1346.0, "weighted_avg": 1341.3509, "simple_avg": 1339.5458, "highest": 1350.0, "lowest": 1332.25}, {"date": "2026-02-20", "closing_rate": 1348.0, "weighted_avg": 1346.3234, "simple_avg": 1346.0829, "highest": 1349.25, "lowest": 1343.0}, {"date": "2026-02-23", "closing_rate": 1353.5, "weighted_avg": 1349.2352, "simple_avg": 1349.2371, "highest": 1354.5, "lowest": 1343.0}, {"date": "2026-02-24", "closing_rate": 1359.0, "weighted_avg": 1355.3745, "simple_avg": 1356.4223, "highest": 1362.0, "lowest": 1351.5}, {"date": "2026-02-25", "closing_rate": 1359.5, "weighted_avg": 1356.1141, "simple_avg": 1356.9775, "highest": 1361.5, "lowest": 1353.0}, {"date": "2026-02-26", "closing_rate": 1361.5, "weighted_avg": 1359.8181, "simple_avg": 1359.8007, "highest": 1362.9, "lowest": 1356.5}, {"date": "2026-02-27", "closing_rate": 1368.5, "weighted_avg": 1363.3954, "simple_avg": 1364.7455, "highest": 1369.0, "lowest": 1345.0}, {"date": "2026-03-02", "closing_rate": 1376.0, "weighted_avg": 1378.0246, "simple_avg": 1378.4822, "highest": 1397.0, "lowest": 1368.5}, {"date": "2026-03-03", "closing_rate": 1390.0, "weighted_avg": 1384.292, "simple_avg": 1386.9084, "highest": 1405.0, "lowest": 1370.0}, {"date": "2026-03-04", "closing_rate": 1382.65, "weighted_avg": 1387.0955, "simple_avg": 1388.135, "highest": 1400.0, "lowest": 1382.5}, {"date": "2026-03-05", "closing_rate": 1388.0, "weighted_avg": 1387.4475, "simple_avg": 1387.8597, "highest": 1392.0, "lowest": 1385.5}], "total_days_available": 18}, "landed_cost_analysis": {"note": "Indicative landed cost only. FOB price is estimated from the FAO Dairy Price Index using the 2014-2016 average WMP price as a base. Actual prices vary by supplier, grade, and contract terms.", "inputs": {"fao_dairy_price_index": 121.8, "fao_dairy_index_date": "2026-01", "usdngn_rate": 1387.4475, "usdngn_rate_date": "2026-03-05", "usdngn_rate_type": "CBN NFEM weighted average"}, "price_build_up_usd_per_mt": {"fob_estimated": 3654.0, "cif_freight_insur": 292.32, "cif_total": 3946.32, "import_tariff_15pct": 591.95, "landed_total": 4538.27}, "landed_price": {"usd_per_mt": 4538.27, "usd_per_litre": 0.57, "ngn_per_mt": 6296608.59, "ngn_per_kg_wmp": 6296.61, "ngn_per_litre_reconstituted": 787.08}, "assumptions": {"wmp_base_price_usd_per_mt": 3000.0, "base_period": "2014-2016 average WMP FOB Oceania (FAO FPI base year)", "cif_adjustment_pct": 8.0, "import_tariff_pct": 15.0, "reconstitution_litres_per_kg": 8.0, "reconstitution_standard": "125g WMP + 875ml water = 1 litre whole milk"}}},
-    marketRows: [{"date": "2023-03", "import_parity_ngn_per_litre": 289.1, "retail_ngn_per_litre": 984.2, "usdngn_rate": 458.78, "dairy_fpi": 135.3}, {"date": "2023-04", "import_parity_ngn_per_litre": 277.5, "retail_ngn_per_litre": 1011.0, "usdngn_rate": 460.8, "dairy_fpi": 129.3}, {"date": "2023-05", "import_parity_ngn_per_litre": 260.75, "retail_ngn_per_litre": 1031.91, "usdngn_rate": 460.02, "dairy_fpi": 121.7}, {"date": "2023-06", "import_parity_ngn_per_litre": 336.24, "retail_ngn_per_litre": 1189.36, "usdngn_rate": 602.12, "dairy_fpi": 119.9}, {"date": "2023-07", "import_parity_ngn_per_litre": 432.29, "retail_ngn_per_litre": 1305.12, "usdngn_rate": 779.31, "dairy_fpi": 119.1}, {"date": "2023-08", "import_parity_ngn_per_litre": 407.43, "retail_ngn_per_litre": 1368.92, "usdngn_rate": 765.33, "dairy_fpi": 114.3}, {"date": "2023-09", "import_parity_ngn_per_litre": 402.43, "retail_ngn_per_litre": 1441.4, "usdngn_rate": 771.47, "dairy_fpi": 112.0}, {"date": "2023-10", "import_parity_ngn_per_litre": 415.67, "retail_ngn_per_litre": 1447.67, "usdngn_rate": 778.78, "dairy_fpi": 114.6}, {"date": "2023-11", "import_parity_ngn_per_litre": 438.63, "retail_ngn_per_litre": 1465.53, "usdngn_rate": 808.39, "dairy_fpi": 116.5}, {"date": "2023-12", "import_parity_ngn_per_litre": 455.93, "retail_ngn_per_litre": 1493.19, "usdngn_rate": 824.69, "dairy_fpi": 118.7}, {"date": "2024-01", "import_parity_ngn_per_litre": 501.26, "retail_ngn_per_litre": 1483.33, "usdngn_rate": 906.69, "dairy_fpi": 118.7}, {"date": "2024-02", "import_parity_ngn_per_litre": 827.08, "retail_ngn_per_litre": 1767.12, "usdngn_rate": 1471.25, "dairy_fpi": 120.7}, {"date": "2024-03", "import_parity_ngn_per_litre": 882.3, "retail_ngn_per_litre": 1883.53, "usdngn_rate": 1527.72, "dairy_fpi": 124.0}, {"date": "2024-04", "import_parity_ngn_per_litre": 715.65, "retail_ngn_per_litre": 2013.01, "usdngn_rate": 1241.16, "dairy_fpi": 123.8}, {"date": "2024-05", "import_parity_ngn_per_litre": 843.81, "retail_ngn_per_litre": 2169.32, "usdngn_rate": 1434.46, "dairy_fpi": 126.3}, {"date": "2024-06", "import_parity_ngn_per_litre": 895.01, "retail_ngn_per_litre": 2237.88, "usdngn_rate": 1502.46, "dairy_fpi": 127.9}, {"date": "2024-07", "import_parity_ngn_per_litre": 938.98, "retail_ngn_per_litre": 2352.69, "usdngn_rate": 1577.51, "dairy_fpi": 127.8}, {"date": "2024-08", "import_parity_ngn_per_litre": 976.33, "retail_ngn_per_litre": 2469.74, "usdngn_rate": 1596.54, "dairy_fpi": 131.3}, {"date": "2024-09", "import_parity_ngn_per_litre": 1035.76, "retail_ngn_per_litre": 2579.74, "usdngn_rate": 1629.19, "dairy_fpi": 136.5}, {"date": "2024-10", "import_parity_ngn_per_litre": 1059.59, "retail_ngn_per_litre": 2645.5, "usdngn_rate": 1641.42, "dairy_fpi": 138.6}, {"date": "2024-11", "import_parity_ngn_per_litre": 1089.86, "retail_ngn_per_litre": null, "usdngn_rate": 1673.83, "dairy_fpi": 139.8}, {"date": "2024-12", "import_parity_ngn_per_litre": 1035.58, "retail_ngn_per_litre": null, "usdngn_rate": 1574.69, "dairy_fpi": 141.2}, {"date": "2025-01", "import_parity_ngn_per_litre": 1032.71, "retail_ngn_per_litre": null, "usdngn_rate": 1549.48, "dairy_fpi": 143.1}, {"date": "2025-02", "import_parity_ngn_per_litre": 1032.73, "retail_ngn_per_litre": null, "usdngn_rate": 1501.25, "dairy_fpi": 147.7}, {"date": "2025-03", "import_parity_ngn_per_litre": 1057.85, "retail_ngn_per_litre": null, "usdngn_rate": 1527.42, "dairy_fpi": 148.7}, {"date": "2025-04", "import_parity_ngn_per_litre": 1116.94, "retail_ngn_per_litre": null, "usdngn_rate": 1580.85, "dairy_fpi": 151.7}, {"date": "2025-05", "import_parity_ngn_per_litre": 1143.65, "retail_ngn_per_litre": null, "usdngn_rate": 1598.64, "dairy_fpi": 153.6}, {"date": "2025-06", "import_parity_ngn_per_litre": 1125.63, "retail_ngn_per_litre": null, "usdngn_rate": 1554.22, "dairy_fpi": 155.5}, {"date": "2025-07", "import_parity_ngn_per_litre": 1102.09, "retail_ngn_per_litre": null, "usdngn_rate": 1530.57, "dairy_fpi": 154.6}, {"date": "2025-08", "import_parity_ngn_per_litre": 1085.2, "retail_ngn_per_litre": null, "usdngn_rate": 1530.88, "dairy_fpi": 152.2}, {"date": "2025-09", "import_parity_ngn_per_litre": 1031.95, "retail_ngn_per_litre": null, "usdngn_rate": 1505.21, "dairy_fpi": 147.2}, {"date": "2025-10", "import_parity_ngn_per_litre": 967.25, "retail_ngn_per_litre": null, "usdngn_rate": 1465.6, "dairy_fpi": 141.7}, {"date": "2025-11", "import_parity_ngn_per_litre": 916.05, "retail_ngn_per_litre": null, "usdngn_rate": 1444.07, "dairy_fpi": 136.2}, {"date": "2025-12", "import_parity_ngn_per_litre": 866.98, "retail_ngn_per_litre": null, "usdngn_rate": 1452.0, "dairy_fpi": 128.2}, {"date": "2026-01", "import_parity_ngn_per_litre": 805.49, "retail_ngn_per_litre": null, "usdngn_rate": 1419.91, "dairy_fpi": 121.8}],
-    herdRows: [{"farm_id": "Farm_NG_01", "animal_id": "A001", "date": "2026-03-04", "activity_mean": 60.666666666666664, "rumination_mean": 413.3333333333333, "temperature_mean": 38.699999999999996, "estrus_events": 1, "anomaly_events": 0, "health_or_sensor_alerts": 1, "latest_battery": 85, "latest_signal": 0.91}, {"farm_id": "Farm_NG_01", "animal_id": "A002", "date": "2026-03-04", "activity_mean": 30.0, "rumination_mean": 491.6666666666667, "temperature_mean": 39.699999999999996, "estrus_events": 0, "anomaly_events": 0, "health_or_sensor_alerts": 3, "latest_battery": 16, "latest_signal": 0.54}, {"farm_id": "Farm_NG_02", "animal_id": "A003", "date": "2026-03-04", "activity_mean": 71.0, "rumination_mean": 395.6666666666667, "temperature_mean": 38.666666666666664, "estrus_events": 1, "anomaly_events": 0, "health_or_sensor_alerts": 1, "latest_battery": 69, "latest_signal": 0.84}, {"farm_id": "Farm_NG_02", "animal_id": "A004", "date": "2026-03-04", "activity_mean": 45.333333333333336, "rumination_mean": 457.5, "temperature_mean": 38.56666666666667, "estrus_events": 0, "anomaly_events": 0, "health_or_sensor_alerts": 3, "latest_battery": 50, "latest_signal": 0.45}],
-    deviceRows: [{"farm_id": "Farm_NG_01", "animal_id": "A001", "source_device_id": "DVC001", "battery_level": 85, "signal_quality": 0.91, "health_alert": "none"}, {"farm_id": "Farm_NG_01", "animal_id": "A002", "source_device_id": "DVC002", "battery_level": 16, "signal_quality": 0.54, "health_alert": "temperature_alert"}, {"farm_id": "Farm_NG_02", "animal_id": "A003", "source_device_id": "DVC003", "battery_level": 69, "signal_quality": 0.84, "health_alert": "none"}, {"farm_id": "Farm_NG_02", "animal_id": "A004", "source_device_id": "DVC004", "battery_level": 50, "signal_quality": 0.45, "health_alert": "none"}],
-    defaults: {"exchange_rate": 1387.4475, "tariff_pct": 15.0, "shipping_pct": 8.0, "global_milk_price_usd_mt": 3654.0, "feed_cost": 450, "labour_cost": 60, "veterinary_cost": 25, "overhead_cost": 40, "milk_yield_per_cow": 8, "herd_size": 20, "retail_price": 2645.5, "import_parity": 787.08, "reconstitution_litres_per_kg": 8.0}
-  };
-</script>
-<script>
   const fmtCurrency = (v, digits = 0) => new Intl.NumberFormat('en-NG', { style:'currency', currency:'NGN', maximumFractionDigits:digits, minimumFractionDigits:digits }).format(Number(v || 0));
   const fmtNumber = (v, digits = 1) => new Intl.NumberFormat('en-GB', { maximumFractionDigits:digits, minimumFractionDigits:digits }).format(Number(v || 0));
   const fmtUsd = (v, digits = 0) => new Intl.NumberFormat('en-US', { style:'currency', currency:'USD', maximumFractionDigits:digits, minimumFractionDigits:digits }).format(Number(v || 0));
 
   const herdDataEmbedded = {"summary": {"animals": 20, "records": 3252, "date_range": ["2025-04-08", "2025-10-01"], "variables_available": 17, "variable_names": ["activity_rate", "animal_id", "coughing_count", "data_collection_rate_pct", "eating_min", "heat_detection_count", "mounting_count", "resting_min", "rumination_min", "sit_plus_stand_min", "sitting_min", "sniffing_min", "source_file", "source_row_id", "source_system", "standing_min", "timestamp"]}, "comparison": {"same_animals": true, "animals_in_file1": 20, "animals_in_file2": 20, "file1_date_range": ["2025-04-08", "2025-06-03"], "file2_date_range": ["2025-06-01", "2025-10-01"], "overlap_animal_timestamp_pairs": 60, "merge_strategy": "concatenate_then_deduplicate"}, "validation": {"duplicate_rows_exact": 0, "duplicate_animal_timestamp_pairs_before_merge": 60, "missing_animal_ids": 0, "missing_timestamps": 0, "empty_columns": [], "column_mismatch": [], "extreme_value_counts": {"activity_rate": 3252, "rumination_min": 0, "eating_min": 0, "standing_min": 0, "sitting_min": 0, "resting_min": 0, "data_collection_rate_pct": 18}, "warnings": ["60 overlapping animal/timestamp pairs across the two files were deduplicated."]}, "daily_averages": [{"date": "2025-04-08", "activity_rate": 70.742, "rumination_min": 294.425, "mounting_count": 7.15, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.8}, {"date": "2025-04-09", "activity_rate": 69.12, "rumination_min": 325.792, "mounting_count": 7.35, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.25}, {"date": "2025-04-10", "activity_rate": 66.829, "rumination_min": 271.117, "mounting_count": 6.9, "heat_detection_count": 0.0, "data_collection_rate_pct": 98.35}, {"date": "2025-04-11", "activity_rate": 74.308, "rumination_min": 340.75, "mounting_count": 10.25, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.9}, {"date": "2025-04-12", "activity_rate": 82.151, "rumination_min": 362.358, "mounting_count": 11.05, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.95}, {"date": "2025-04-13", "activity_rate": 79.55, "rumination_min": 407.6, "mounting_count": 10.15, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-04-14", "activity_rate": 81.01, "rumination_min": 380.017, "mounting_count": 9.65, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-04-15", "activity_rate": 84.012, "rumination_min": 342.283, "mounting_count": 13.5, "heat_detection_count": 0.1, "data_collection_rate_pct": 100.0}, {"date": "2025-04-16", "activity_rate": 80.563, "rumination_min": 373.042, "mounting_count": 12.1, "heat_detection_count": 0.4, "data_collection_rate_pct": 100.0}, {"date": "2025-04-17", "activity_rate": 83.701, "rumination_min": 354.908, "mounting_count": 9.55, "heat_detection_count": 0.2, "data_collection_rate_pct": 100.0}, {"date": "2025-04-18", "activity_rate": 76.838, "rumination_min": 342.125, "mounting_count": 8.5, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-04-19", "activity_rate": 73.862, "rumination_min": 334.425, "mounting_count": 8.75, "heat_detection_count": 0.1, "data_collection_rate_pct": 100.0}, {"date": "2025-04-20", "activity_rate": 71.427, "rumination_min": 312.025, "mounting_count": 6.4, "heat_detection_count": 0.1, "data_collection_rate_pct": 100.0}, {"date": "2025-04-21", "activity_rate": 76.071, "rumination_min": 307.267, "mounting_count": 7.65, "heat_detection_count": 0.1, "data_collection_rate_pct": 100.0}, {"date": "2025-04-22", "activity_rate": 79.171, "rumination_min": 305.992, "mounting_count": 8.35, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-04-23", "activity_rate": 79.303, "rumination_min": 344.95, "mounting_count": 6.15, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-04-24", "activity_rate": 84.297, "rumination_min": 411.9, "mounting_count": 7.35, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-04-25", "activity_rate": 82.162, "rumination_min": 438.967, "mounting_count": 8.1, "heat_detection_count": 0.35, "data_collection_rate_pct": 100.0}, {"date": "2025-04-26", "activity_rate": 71.924, "rumination_min": 376.308, "mounting_count": 8.3, "heat_detection_count": 0.45, "data_collection_rate_pct": 100.0}, {"date": "2025-04-27", "activity_rate": 71.269, "rumination_min": 330.242, "mounting_count": 11.25, "heat_detection_count": 0.45, "data_collection_rate_pct": 100.0}, {"date": "2025-04-28", "activity_rate": 72.774, "rumination_min": 309.642, "mounting_count": 14.45, "heat_detection_count": 0.85, "data_collection_rate_pct": 100.0}, {"date": "2025-04-29", "activity_rate": 80.383, "rumination_min": 312.425, "mounting_count": 10.15, "heat_detection_count": 0.25, "data_collection_rate_pct": 100.0}, {"date": "2025-04-30", "activity_rate": 72.43, "rumination_min": 306.042, "mounting_count": 6.1, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-01", "activity_rate": 71.761, "rumination_min": 293.242, "mounting_count": 5.3, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-02", "activity_rate": 70.13, "rumination_min": 307.875, "mounting_count": 4.3, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-03", "activity_rate": 72.609, "rumination_min": 331.917, "mounting_count": 7.1, "heat_detection_count": 0.6, "data_collection_rate_pct": 100.0}, {"date": "2025-05-04", "activity_rate": 69.511, "rumination_min": 344.0, "mounting_count": 4.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-05", "activity_rate": 69.233, "rumination_min": 346.942, "mounting_count": 5.45, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-06", "activity_rate": 64.376, "rumination_min": 319.408, "mounting_count": 5.85, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-07", "activity_rate": 69.471, "rumination_min": 275.833, "mounting_count": 9.25, "heat_detection_count": 0.4, "data_collection_rate_pct": 100.0}, {"date": "2025-05-08", "activity_rate": 66.141, "rumination_min": 305.542, "mounting_count": 6.7, "heat_detection_count": 0.2, "data_collection_rate_pct": 100.0}, {"date": "2025-05-09", "activity_rate": 65.226, "rumination_min": 268.358, "mounting_count": 6.95, "heat_detection_count": 0.1, "data_collection_rate_pct": 100.0}, {"date": "2025-05-10", "activity_rate": 74.261, "rumination_min": 284.133, "mounting_count": 6.4, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-11", "activity_rate": 63.561, "rumination_min": 369.95, "mounting_count": 6.85, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-12", "activity_rate": 68.962, "rumination_min": 235.217, "mounting_count": 8.65, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-13", "activity_rate": 86.538, "rumination_min": 241.225, "mounting_count": 8.6, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-05-14", "activity_rate": 109.785, "rumination_min": 280.575, "mounting_count": 14.7, "heat_detection_count": 0.0, "data_collection_rate_pct": 95.45}, {"date": "2025-05-15", "activity_rate": 102.634, "rumination_min": 367.008, "mounting_count": 11.6, "heat_detection_count": 0.0, "data_collection_rate_pct": 92.4}, {"date": "2025-05-16", "activity_rate": 110.211, "rumination_min": 299.35, "mounting_count": 12.3, "heat_detection_count": 0.0, "data_collection_rate_pct": 92.9}, {"date": "2025-05-17", "activity_rate": 97.535, "rumination_min": 341.042, "mounting_count": 10.2, "heat_detection_count": 0.0, "data_collection_rate_pct": 92.3}, {"date": "2025-05-18", "activity_rate": 71.362, "rumination_min": 269.267, "mounting_count": 19.85, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-19", "activity_rate": 70.362, "rumination_min": 283.083, "mounting_count": 14.5, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-20", "activity_rate": 73.006, "rumination_min": 310.483, "mounting_count": 7.9, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-05-21", "activity_rate": 70.699, "rumination_min": 305.95, "mounting_count": 8.45, "heat_detection_count": 0.4, "data_collection_rate_pct": 100.0}, {"date": "2025-05-22", "activity_rate": 67.231, "rumination_min": 294.783, "mounting_count": 5.1, "heat_detection_count": 0.15, "data_collection_rate_pct": 100.0}, {"date": "2025-05-23", "activity_rate": 63.273, "rumination_min": 297.75, "mounting_count": 6.6, "heat_detection_count": 0.3, "data_collection_rate_pct": 100.0}, {"date": "2025-05-24", "activity_rate": 66.248, "rumination_min": 298.417, "mounting_count": 6.2, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-05-25", "activity_rate": 70.913, "rumination_min": 327.942, "mounting_count": 5.35, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-26", "activity_rate": 63.644, "rumination_min": 347.358, "mounting_count": 5.85, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-27", "activity_rate": 113.962, "rumination_min": 241.142, "mounting_count": 11.05, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-28", "activity_rate": 108.35, "rumination_min": 302.642, "mounting_count": 8.3, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-29", "activity_rate": 60.934, "rumination_min": 356.908, "mounting_count": 3.7, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-30", "activity_rate": 62.984, "rumination_min": 273.042, "mounting_count": 6.7, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-05-31", "activity_rate": 66.131, "rumination_min": 294.267, "mounting_count": 7.6, "heat_detection_count": 0.15, "data_collection_rate_pct": 100.0}, {"date": "2025-06-01", "activity_rate": 65.684, "rumination_min": 321.658, "mounting_count": 6.8, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-02", "activity_rate": 63.688, "rumination_min": 268.917, "mounting_count": 6.05, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-03", "activity_rate": 62.454, "rumination_min": 255.717, "mounting_count": 4.25, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-04", "activity_rate": 60.939, "rumination_min": 238.608, "mounting_count": 4.55, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-05", "activity_rate": 59.839, "rumination_min": 262.142, "mounting_count": 3.05, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-06", "activity_rate": 63.54, "rumination_min": 283.95, "mounting_count": 6.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-07", "activity_rate": 63.212, "rumination_min": 291.617, "mounting_count": 6.6, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-08", "activity_rate": 62.996, "rumination_min": 287.342, "mounting_count": 7.4, "heat_detection_count": 0.3, "data_collection_rate_pct": 100.0}, {"date": "2025-06-09", "activity_rate": 64.78, "rumination_min": 284.883, "mounting_count": 14.2, "heat_detection_count": 1.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-10", "activity_rate": 57.772, "rumination_min": 250.842, "mounting_count": 6.9, "heat_detection_count": 0.2, "data_collection_rate_pct": 100.0}, {"date": "2025-06-11", "activity_rate": 64.971, "rumination_min": 248.333, "mounting_count": 7.9, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-06-12", "activity_rate": 66.97, "rumination_min": 310.192, "mounting_count": 8.1, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-13", "activity_rate": 83.083, "rumination_min": 283.683, "mounting_count": 15.15, "heat_detection_count": 1.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-14", "activity_rate": 80.006, "rumination_min": 338.508, "mounting_count": 9.1, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-15", "activity_rate": 102.665, "rumination_min": 249.383, "mounting_count": 6.9, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-16", "activity_rate": 73.685, "rumination_min": 250.983, "mounting_count": 6.65, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-17", "activity_rate": 60.526, "rumination_min": 251.2, "mounting_count": 4.05, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-18", "activity_rate": 62.565, "rumination_min": 267.442, "mounting_count": 5.2, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-19", "activity_rate": 63.644, "rumination_min": 265.958, "mounting_count": 13.55, "heat_detection_count": 0.75, "data_collection_rate_pct": 100.0}, {"date": "2025-06-20", "activity_rate": 63.568, "rumination_min": 272.225, "mounting_count": 5.15, "heat_detection_count": 0.25, "data_collection_rate_pct": 100.0}, {"date": "2025-06-21", "activity_rate": 61.697, "rumination_min": 287.833, "mounting_count": 5.55, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-22", "activity_rate": 63.6, "rumination_min": 274.658, "mounting_count": 4.3, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-23", "activity_rate": 69.087, "rumination_min": 319.642, "mounting_count": 3.5, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-24", "activity_rate": 70.926, "rumination_min": 367.767, "mounting_count": 4.7, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-25", "activity_rate": 74.891, "rumination_min": 366.258, "mounting_count": 4.05, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-26", "activity_rate": 70.966, "rumination_min": 371.0, "mounting_count": 4.2, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-27", "activity_rate": 66.604, "rumination_min": 329.158, "mounting_count": 5.2, "heat_detection_count": 0.15, "data_collection_rate_pct": 100.0}, {"date": "2025-06-28", "activity_rate": 64.004, "rumination_min": 287.117, "mounting_count": 5.85, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-06-29", "activity_rate": 69.638, "rumination_min": 236.125, "mounting_count": 5.9, "heat_detection_count": 0.05, "data_collection_rate_pct": 100.0}, {"date": "2025-06-30", "activity_rate": 75.279, "rumination_min": 249.933, "mounting_count": 12.65, "heat_detection_count": 0.6, "data_collection_rate_pct": 100.0}, {"date": "2025-07-01", "activity_rate": 74.344, "rumination_min": 255.317, "mounting_count": 16.7, "heat_detection_count": 0.25, "data_collection_rate_pct": 100.0}, {"date": "2025-07-02", "activity_rate": 73.186, "rumination_min": 230.825, "mounting_count": 8.35, "heat_detection_count": 0.45, "data_collection_rate_pct": 100.0}, {"date": "2025-07-03", "activity_rate": 78.729, "rumination_min": 230.533, "mounting_count": 7.55, "heat_detection_count": 0.3, "data_collection_rate_pct": 100.0}, {"date": "2025-07-04", "activity_rate": 72.875, "rumination_min": 248.108, "mounting_count": 9.85, "heat_detection_count": 0.45, "data_collection_rate_pct": 100.0}, {"date": "2025-07-05", "activity_rate": 69.886, "rumination_min": 199.367, "mounting_count": 5.8, "heat_detection_count": 0.1, "data_collection_rate_pct": 100.0}, {"date": "2025-07-06", "activity_rate": 71.603, "rumination_min": 220.158, "mounting_count": 8.05, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-07", "activity_rate": 70.743, "rumination_min": 223.383, "mounting_count": 6.8, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-08", "activity_rate": 60.87, "rumination_min": 186.425, "mounting_count": 6.6, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-09", "activity_rate": 71.732, "rumination_min": 96.883, "mounting_count": 11.05, "heat_detection_count": 0.25, "data_collection_rate_pct": 100.0}, {"date": "2025-07-10", "activity_rate": 68.224, "rumination_min": 119.992, "mounting_count": 8.3, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-11", "activity_rate": 66.687, "rumination_min": 134.292, "mounting_count": 6.5, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-12", "activity_rate": 65.008, "rumination_min": 135.283, "mounting_count": 5.25, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-13", "activity_rate": 66.2, "rumination_min": 140.517, "mounting_count": 5.9, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-14", "activity_rate": 66.267, "rumination_min": 180.925, "mounting_count": 4.7, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-15", "activity_rate": 75.619, "rumination_min": 214.425, "mounting_count": 5.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 90.0}, {"date": "2025-07-16", "activity_rate": 67.11, "rumination_min": 289.858, "mounting_count": 4.4, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-17", "activity_rate": 66.346, "rumination_min": 203.55, "mounting_count": 4.4, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-18", "activity_rate": 106.672, "rumination_min": 213.917, "mounting_count": 11.75, "heat_detection_count": 0.1, "data_collection_rate_pct": 99.05}, {"date": "2025-07-19", "activity_rate": 98.217, "rumination_min": 313.658, "mounting_count": 13.0, "heat_detection_count": 2.421, "data_collection_rate_pct": 100.0}, {"date": "2025-07-20", "activity_rate": 109.077, "rumination_min": 295.535, "mounting_count": 10.789, "heat_detection_count": 0.842, "data_collection_rate_pct": 100.0}, {"date": "2025-07-21", "activity_rate": 118.405, "rumination_min": 312.579, "mounting_count": 10.684, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-22", "activity_rate": 77.644, "rumination_min": 246.237, "mounting_count": 9.421, "heat_detection_count": 2.105, "data_collection_rate_pct": 100.0}, {"date": "2025-07-23", "activity_rate": 76.06, "rumination_min": 173.096, "mounting_count": 8.579, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-24", "activity_rate": 82.393, "rumination_min": 144.947, "mounting_count": 20.158, "heat_detection_count": 6.105, "data_collection_rate_pct": 100.0}, {"date": "2025-07-25", "activity_rate": 75.275, "rumination_min": 175.667, "mounting_count": 8.842, "heat_detection_count": 0.421, "data_collection_rate_pct": 100.0}, {"date": "2025-07-26", "activity_rate": 75.977, "rumination_min": 164.754, "mounting_count": 13.789, "heat_detection_count": 4.842, "data_collection_rate_pct": 100.0}, {"date": "2025-07-27", "activity_rate": 69.162, "rumination_min": 200.754, "mounting_count": 5.105, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-28", "activity_rate": 133.664, "rumination_min": 247.991, "mounting_count": 10.684, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-29", "activity_rate": 62.17, "rumination_min": 317.351, "mounting_count": 4.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-30", "activity_rate": 60.594, "rumination_min": 223.044, "mounting_count": 3.211, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-07-31", "activity_rate": 67.887, "rumination_min": 208.333, "mounting_count": 7.368, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-01", "activity_rate": 68.142, "rumination_min": 279.675, "mounting_count": 6.263, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-02", "activity_rate": 66.057, "rumination_min": 298.763, "mounting_count": 6.211, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-03", "activity_rate": 67.725, "rumination_min": 279.149, "mounting_count": 6.737, "heat_detection_count": 1.474, "data_collection_rate_pct": 100.0}, {"date": "2025-08-04", "activity_rate": 68.966, "rumination_min": 296.623, "mounting_count": 8.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-05", "activity_rate": 63.185, "rumination_min": 295.965, "mounting_count": 4.526, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-06", "activity_rate": 124.874, "rumination_min": 278.895, "mounting_count": 10.842, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.684}, {"date": "2025-08-07", "activity_rate": 63.237, "rumination_min": 285.018, "mounting_count": 4.737, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-08", "activity_rate": 62.104, "rumination_min": 241.912, "mounting_count": 5.737, "heat_detection_count": 1.684, "data_collection_rate_pct": 100.0}, {"date": "2025-08-09", "activity_rate": 57.935, "rumination_min": 242.605, "mounting_count": 2.789, "heat_detection_count": 0.421, "data_collection_rate_pct": 100.0}, {"date": "2025-08-10", "activity_rate": 54.004, "rumination_min": 231.754, "mounting_count": 3.263, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-11", "activity_rate": 79.224, "rumination_min": 217.816, "mounting_count": 6.421, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-12", "activity_rate": 60.28, "rumination_min": 257.132, "mounting_count": 4.737, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-13", "activity_rate": 65.183, "rumination_min": 296.211, "mounting_count": 4.842, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-14", "activity_rate": 111.643, "rumination_min": 307.088, "mounting_count": 9.158, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-15", "activity_rate": 68.337, "rumination_min": 306.123, "mounting_count": 4.632, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-16", "activity_rate": 70.699, "rumination_min": 325.474, "mounting_count": 7.737, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-17", "activity_rate": 67.546, "rumination_min": 297.781, "mounting_count": 12.842, "heat_detection_count": 4.842, "data_collection_rate_pct": 100.0}, {"date": "2025-08-18", "activity_rate": 103.771, "rumination_min": 251.825, "mounting_count": 11.105, "heat_detection_count": 0.211, "data_collection_rate_pct": 100.0}, {"date": "2025-08-19", "activity_rate": 66.421, "rumination_min": 275.491, "mounting_count": 8.421, "heat_detection_count": 0.842, "data_collection_rate_pct": 100.0}, {"date": "2025-08-20", "activity_rate": 68.828, "rumination_min": 283.474, "mounting_count": 5.684, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-21", "activity_rate": 63.054, "rumination_min": 239.605, "mounting_count": 7.053, "heat_detection_count": 0.842, "data_collection_rate_pct": 100.0}, {"date": "2025-08-22", "activity_rate": 65.786, "rumination_min": 211.333, "mounting_count": 9.737, "heat_detection_count": 1.263, "data_collection_rate_pct": 100.0}, {"date": "2025-08-23", "activity_rate": 62.902, "rumination_min": 215.184, "mounting_count": 6.211, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-24", "activity_rate": 138.53, "rumination_min": 214.816, "mounting_count": 13.105, "heat_detection_count": 0.421, "data_collection_rate_pct": 100.0}, {"date": "2025-08-25", "activity_rate": 82.304, "rumination_min": 325.219, "mounting_count": 8.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-26", "activity_rate": 66.601, "rumination_min": 271.053, "mounting_count": 6.368, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-27", "activity_rate": 143.373, "rumination_min": 244.298, "mounting_count": 13.737, "heat_detection_count": 1.895, "data_collection_rate_pct": 100.0}, {"date": "2025-08-28", "activity_rate": 64.274, "rumination_min": 312.798, "mounting_count": 2.842, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-08-29", "activity_rate": 68.704, "rumination_min": 281.509, "mounting_count": 5.263, "heat_detection_count": 0.0, "data_collection_rate_pct": 98.316}, {"date": "2025-08-30", "activity_rate": 66.242, "rumination_min": 253.921, "mounting_count": 4.684, "heat_detection_count": 0.0, "data_collection_rate_pct": 96.579}, {"date": "2025-08-31", "activity_rate": 83.263, "rumination_min": 285.018, "mounting_count": 7.316, "heat_detection_count": 0.0, "data_collection_rate_pct": 96.842}, {"date": "2025-09-01", "activity_rate": 77.992, "rumination_min": 369.807, "mounting_count": 6.421, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-02", "activity_rate": 73.411, "rumination_min": 390.605, "mounting_count": 5.105, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-03", "activity_rate": 73.223, "rumination_min": 332.675, "mounting_count": 5.737, "heat_detection_count": 1.474, "data_collection_rate_pct": 100.0}, {"date": "2025-09-04", "activity_rate": 71.654, "rumination_min": 361.947, "mounting_count": 4.368, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-05", "activity_rate": 67.732, "rumination_min": 286.263, "mounting_count": 5.737, "heat_detection_count": 0.0, "data_collection_rate_pct": 98.263}, {"date": "2025-09-06", "activity_rate": 62.865, "rumination_min": 293.352, "mounting_count": 10.167, "heat_detection_count": 2.222, "data_collection_rate_pct": 100.0}, {"date": "2025-09-07", "activity_rate": 68.345, "rumination_min": 326.824, "mounting_count": 4.556, "heat_detection_count": 0.444, "data_collection_rate_pct": 101.056}, {"date": "2025-09-08", "activity_rate": 80.493, "rumination_min": 281.981, "mounting_count": 5.167, "heat_detection_count": 0.0, "data_collection_rate_pct": 85.667}, {"date": "2025-09-09", "activity_rate": 80.981, "rumination_min": 357.245, "mounting_count": 10.353, "heat_detection_count": 2.824, "data_collection_rate_pct": 99.941}, {"date": "2025-09-10", "activity_rate": 71.808, "rumination_min": 354.98, "mounting_count": 3.941, "heat_detection_count": 0.0, "data_collection_rate_pct": 98.176}, {"date": "2025-09-11", "activity_rate": 72.729, "rumination_min": 357.969, "mounting_count": 2.625, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.938}, {"date": "2025-09-12", "activity_rate": 73.381, "rumination_min": 315.896, "mounting_count": 4.5, "heat_detection_count": 0.25, "data_collection_rate_pct": 86.0}, {"date": "2025-09-13", "activity_rate": 82.932, "rumination_min": 406.815, "mounting_count": 5.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-14", "activity_rate": 79.832, "rumination_min": 352.056, "mounting_count": 3.556, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.889}, {"date": "2025-09-15", "activity_rate": 78.18, "rumination_min": 385.611, "mounting_count": 2.556, "heat_detection_count": 0.0, "data_collection_rate_pct": 97.667}, {"date": "2025-09-16", "activity_rate": 84.821, "rumination_min": 348.352, "mounting_count": 2.778, "heat_detection_count": 0.0, "data_collection_rate_pct": 94.111}, {"date": "2025-09-17", "activity_rate": 75.022, "rumination_min": 373.685, "mounting_count": 3.889, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-18", "activity_rate": 71.509, "rumination_min": 359.222, "mounting_count": 2.667, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-19", "activity_rate": 66.555, "rumination_min": 376.5, "mounting_count": 1.444, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-20", "activity_rate": 61.451, "rumination_min": 303.278, "mounting_count": 2.333, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-21", "activity_rate": 72.918, "rumination_min": 321.444, "mounting_count": 2.778, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-22", "activity_rate": 84.79, "rumination_min": 383.87, "mounting_count": 2.0, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-23", "activity_rate": 76.522, "rumination_min": 396.574, "mounting_count": 3.111, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-24", "activity_rate": 74.896, "rumination_min": 427.352, "mounting_count": 1.444, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-25", "activity_rate": 69.93, "rumination_min": 372.389, "mounting_count": 3.222, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-26", "activity_rate": 71.586, "rumination_min": 377.167, "mounting_count": 5.444, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-09-27", "activity_rate": 74.543, "rumination_min": 309.889, "mounting_count": 5.111, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.889}, {"date": "2025-09-28", "activity_rate": 79.63, "rumination_min": 323.5, "mounting_count": 4.222, "heat_detection_count": 0.0, "data_collection_rate_pct": 99.889}, {"date": "2025-09-29", "activity_rate": 92.456, "rumination_min": 272.296, "mounting_count": 7.333, "heat_detection_count": 0.0, "data_collection_rate_pct": 93.667}, {"date": "2025-09-30", "activity_rate": 70.232, "rumination_min": 364.167, "mounting_count": 4.25, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}, {"date": "2025-10-01", "activity_rate": 60.311, "rumination_min": 215.875, "mounting_count": 5.5, "heat_detection_count": 0.0, "data_collection_rate_pct": 100.0}], "records_per_animal": [{"animal_id": "COW-10000245", "records": 175}, {"animal_id": "COW-10000246", "records": 177}, {"animal_id": "COW-10000247", "records": 177}, {"animal_id": "COW-10000248", "records": 158}, {"animal_id": "COW-10000249", "records": 158}, {"animal_id": "COW-10000250", "records": 102}, {"animal_id": "COW-10000251", "records": 175}, {"animal_id": "COW-10000252", "records": 175}, {"animal_id": "COW-10000253", "records": 177}, {"animal_id": "COW-10000254", "records": 156}, {"animal_id": "COW-10000256", "records": 154}, {"animal_id": "COW-10000257", "records": 158}, {"animal_id": "COW-10000258", "records": 177}, {"animal_id": "COW-10000259", "records": 175}, {"animal_id": "COW-10000260", "records": 158}, {"animal_id": "COW-10000261", "records": 158}, {"animal_id": "COW-10000262", "records": 158}, {"animal_id": "COW-10000263", "records": 175}, {"animal_id": "COW-10000264", "records": 151}, {"animal_id": "COW-10000265", "records": 158}], "missingness": [{"variable": "activity_rate", "missing_fraction": 0.0}, {"variable": "animal_id", "missing_fraction": 0.0}, {"variable": "coughing_count", "missing_fraction": 0.0}, {"variable": "data_collection_rate_pct", "missing_fraction": 0.0}, {"variable": "eating_min", "missing_fraction": 0.0}, {"variable": "heat_detection_count", "missing_fraction": 0.0}, {"variable": "mounting_count", "missing_fraction": 0.0}, {"variable": "resting_min", "missing_fraction": 0.0}, {"variable": "rumination_min", "missing_fraction": 0.0}, {"variable": "sit_plus_stand_min", "missing_fraction": 0.0}, {"variable": "sitting_min", "missing_fraction": 0.0}, {"variable": "sniffing_min", "missing_fraction": 0.0}, {"variable": "source_file", "missing_fraction": 0.0}, {"variable": "source_row_id", "missing_fraction": 0.0}, {"variable": "source_system", "missing_fraction": 0.0}, {"variable": "standing_min", "missing_fraction": 0.0}, {"variable": "timestamp", "missing_fraction": 0.0}], "coverage": [{"animal_id": "COW-10000245", "start": "2025-04-08", "end": "2025-09-29", "records": 175}, {"animal_id": "COW-10000246", "start": "2025-04-08", "end": "2025-10-01", "records": 177}, {"animal_id": "COW-10000247", "start": "2025-04-08", "end": "2025-10-01", "records": 177}, {"animal_id": "COW-10000248", "start": "2025-04-08", "end": "2025-09-12", "records": 158}, {"animal_id": "COW-10000249", "start": "2025-04-08", "end": "2025-09-12", "records": 158}, {"animal_id": "COW-10000250", "start": "2025-04-08", "end": "2025-07-18", "records": 102}, {"animal_id": "COW-10000251", "start": "2025-04-08", "end": "2025-09-29", "records": 175}, {"animal_id": "COW-10000252", "start": "2025-04-08", "end": "2025-09-29", "records": 175}, {"animal_id": "COW-10000253", "start": "2025-04-08", "end": "2025-10-01", "records": 177}, {"animal_id": "COW-10000254", "start": "2025-04-08", "end": "2025-09-10", "records": 156}, {"animal_id": "COW-10000256", "start": "2025-04-08", "end": "2025-09-08", "records": 154}, {"animal_id": "COW-10000257", "start": "2025-04-08", "end": "2025-09-12", "records": 158}, {"animal_id": "COW-10000258", "start": "2025-04-08", "end": "2025-10-01", "records": 177}, {"animal_id": "COW-10000259", "start": "2025-04-08", "end": "2025-09-29", "records": 175}, {"animal_id": "COW-10000260", "start": "2025-04-08", "end": "2025-09-12", "records": 158}, {"animal_id": "COW-10000261", "start": "2025-04-08", "end": "2025-09-12", "records": 158}, {"animal_id": "COW-10000262", "start": "2025-04-08", "end": "2025-09-12", "records": 158}, {"animal_id": "COW-10000263", "start": "2025-04-08", "end": "2025-09-29", "records": 175}, {"animal_id": "COW-10000264", "start": "2025-04-08", "end": "2025-09-05", "records": 151}, {"animal_id": "COW-10000265", "start": "2025-04-08", "end": "2025-09-12", "records": 158}], "estrus_alerts": [{"animal_id": "COW-10000258", "timestamp": "2025-08-24", "estrus_score": 9, "estrus_status": "HIGH"}, {"animal_id": "COW-10000265", "timestamp": "2025-07-26", "estrus_score": 9, "estrus_status": "HIGH"}, {"animal_id": "COW-10000247", "timestamp": "2025-07-20", "estrus_score": 9, "estrus_status": "HIGH"}, {"animal_id": "COW-10000254", "timestamp": "2025-07-09", "estrus_score": 9, "estrus_status": "HIGH"}, {"animal_id": "COW-10000246", "timestamp": "2025-06-29", "estrus_score": 9, "estrus_status": "HIGH"}, {"animal_id": "COW-10000246", "timestamp": "2025-08-27", "estrus_score": 7, "estrus_status": "HIGH"}, {"animal_id": "COW-10000251", "timestamp": "2025-08-27", "estrus_score": 7, "estrus_status": "HIGH"}, {"animal_id": "COW-10000256", "timestamp": "2025-08-27", "estrus_score": 7, "estrus_status": "HIGH"}, {"animal_id": "COW-10000246", "timestamp": "2025-08-22", "estrus_score": 7, "estrus_status": "HIGH"}, {"animal_id": "COW-10000246", "timestamp": "2025-08-21", "estrus_score": 7, "estrus_status": "HIGH"}, {"animal_id": "COW-10000246", "timestamp": "2025-08-09", "estrus_score": 7, "estrus_status": "HIGH"}, {"animal_id": "COW-10000246", "timestamp": "2025-08-08", "estrus_score": 7, "estrus_status": "HIGH"}], "health_alerts": [{"animal_id": "COW-10000263", "timestamp": "2025-08-30", "health_score": 6, "health_status": "ALERT"}, {"animal_id": "COW-10000258", "timestamp": "2025-10-01", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000245", "timestamp": "2025-07-27", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000250", "timestamp": "2025-07-13", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000252", "timestamp": "2025-07-13", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000257", "timestamp": "2025-07-13", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000247", "timestamp": "2025-07-12", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000247", "timestamp": "2025-07-11", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000250", "timestamp": "2025-07-10", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000250", "timestamp": "2025-07-09", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000250", "timestamp": "2025-07-06", "health_score": 5, "health_status": "ALERT"}, {"animal_id": "COW-10000250", "timestamp": "2025-07-05", "health_score": 5, "health_status": "ALERT"}]};
 
-  const state = { ...dashboardData.defaults };
+  const state = {
+    exchangeRate: 1387.45,
+    tariffPct: 15.0,
+    shippingPct: 8.0,
+    globalMilkPriceUsdMt: 3654.0,
+    feedCost: 450,
+    labourCost: 60,
+    milkYieldPerCow: 8,
+    herdSize: 20,
+    veterinary_cost: 25,
+    overhead_cost: 40,
+    retail_price: 2645.5,
+    import_parity: 787.08,
+    reconstitution_litres_per_kg: 8.0
+  };
   let charts = {};
 
   function getScenario() {
     return {
-      exchangeRate: Number(document.getElementById('exchangeRateInput').value),
-      tariffPct: Number(document.getElementById('tariffInput').value),
-      shippingPct: Number(document.getElementById('shippingInput').value),
-      globalMilkPriceUsdMt: Number(document.getElementById('globalMilkPriceInput').value),
-      feedCost: Number(document.getElementById('feedCostInput').value),
-      labourCost: Number(document.getElementById('labourCostInput').value),
-      milkYieldPerCow: Number(document.getElementById('yieldInput').value),
-      herdSize: Number(document.getElementById('herdSizeInput').value),
-      vetCost: Number(state.veterinary_cost),
-      overheadCost: Number(state.overhead_cost),
-      retailPrice: Number(state.retail_price),
-      baselineImportParity: Number(state.import_parity),
-      litresPerKg: Number(state.reconstitution_litres_per_kg)
+      exchangeRate:        state.exchangeRate,
+      tariffPct:           state.tariffPct,
+      shippingPct:         state.shippingPct,
+      globalMilkPriceUsdMt: state.globalMilkPriceUsdMt,
+      feedCost:            state.feedCost,
+      labourCost:          state.labourCost,
+      milkYieldPerCow:     state.milkYieldPerCow,
+      herdSize:            state.herdSize,
+      vetCost:             state.veterinary_cost,
+      overheadCost:        state.overhead_cost,
+      retailPrice:         state.retail_price,
+      baselineImportParity: state.import_parity,
+      litresPerKg:         state.reconstitution_litres_per_kg
     };
   }
 
@@ -583,49 +466,6 @@
     }));
   }
 
-  function bindSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    document.getElementById('toggleSidebar').addEventListener('click', () => {
-      sidebar.classList.toggle('collapsed');
-      document.getElementById('toggleSidebar').textContent = sidebar.classList.contains('collapsed') ? '⟩' : '⟨';
-    });
-
-    ['exchangeRateInput','tariffInput','shippingInput','globalMilkPriceInput','feedCostInput','labourCostInput','yieldInput','herdSizeInput'].forEach(id => {
-      document.getElementById(id).addEventListener('input', refreshDashboard);
-    });
-
-    document.getElementById('resetScenarioBtn').addEventListener('click', () => {
-      Object.entries(dashboardData.defaults).forEach(([key, value]) => {
-        const map = { exchange_rate:'exchangeRateInput', tariff_pct:'tariffInput', shipping_pct:'shippingInput', global_milk_price_usd_mt:'globalMilkPriceInput', feed_cost:'feedCostInput', labour_cost:'labourCostInput', milk_yield_per_cow:'yieldInput', herd_size:'herdSizeInput' };
-        if (map[key]) document.getElementById(map[key]).value = value;
-      });
-      refreshDashboard();
-    renderHerdIntelligence();
-    });
-
-    document.getElementById('saveScenarioBtn').addEventListener('click', () => {
-      localStorage.setItem('livestock-intelligence-scenario', JSON.stringify(getScenario()));
-      alert('Scenario saved in this browser.');
-    });
-
-    document.getElementById('exportResultsBtn').addEventListener('click', () => {
-      const scenario = getScenario();
-      const metrics = calculateMetrics(scenario);
-      const blob = new Blob([JSON.stringify({ scenario, metrics, exported_at:new Date().toISOString() }, null, 2)], { type:'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'livestock_intelligence_scenario.json'; a.click(); URL.revokeObjectURL(url);
-    });
-
-    const saved = localStorage.getItem('livestock-intelligence-scenario');
-    if (saved) {
-      try {
-        const s = JSON.parse(saved);
-        const fields = { exchangeRate:'exchangeRateInput', tariffPct:'tariffInput', shippingPct:'shippingInput', globalMilkPriceUsdMt:'globalMilkPriceInput', feedCost:'feedCostInput', labourCost:'labourCostInput', milkYieldPerCow:'yieldInput', herdSize:'herdSizeInput' };
-        Object.entries(fields).forEach(([k, id]) => { if (s[k] !== undefined) document.getElementById(id).value = s[k]; });
-      } catch (e) { console.warn('Saved scenario could not be restored', e); }
-    }
-  }
 
   function fillTable(targetId, rows, keys, formatters = {}) {
     const tbody = document.getElementById(targetId);
@@ -636,75 +476,145 @@
     }).join('') + '</tr>').join('');
   }
 
-  function buildMarketTable() {
-    fillTable('marketHistoryTable', dashboardData.marketRows, ['date','import_parity_ngn_per_litre','retail_ngn_per_litre','usdngn_rate','dairy_fpi'], {
-      import_parity_ngn_per_litre: v => fmtCurrency(v, 2),
-      retail_ngn_per_litre: v => v === '' ? '—' : fmtCurrency(v, 2),
-      usdngn_rate: v => '₦' + fmtNumber(v, 2),
-      dairy_fpi: v => fmtNumber(v, 1)
+  async function loadMarketData() {
+    // Show refreshing state
+    ['kpiGlobalWmp','kpiImportParity','kpiExchangeRate','kpiRetail'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = 'Refreshing…';
     });
-    fillTable('deviceStatusTable', dashboardData.deviceRows, ['farm_id','animal_id','source_device_id','battery_level','signal_quality','health_alert'], {
-      battery_level: v => fmtNumber(v, 0) + '%',
-      signal_quality: v => fmtNumber(v, 2)
-    });
+    try {
+      const res = await fetch('/api/market', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const latest = data.latest || {};
+      const rows = (data.market_rows || []).slice(-24).reverse();
+
+      // KPIs
+      const futuresClose = data.futures?.class_iii_milk?.close;
+      document.getElementById('kpiGlobalWmp').textContent = futuresClose != null
+        ? '$' + Number(futuresClose).toFixed(2) + '/cwt'
+        : '—';
+
+      document.getElementById('kpiImportParity').textContent = latest.import_parity_ngn_per_litre != null
+        ? '₦' + fmtNumber(latest.import_parity_ngn_per_litre, 2) + '/L'
+        : '—';
+
+      document.getElementById('kpiExchangeRate').textContent = latest.usdngn_rate != null
+        ? '₦' + fmtNumber(latest.usdngn_rate, 2) + '/USD'
+        : '—';
+
+      const latestRetail = rows.find(r => r.retail_ngn_per_litre != null && r.retail_ngn_per_litre !== '');
+      const retailEl = document.getElementById('kpiRetail');
+      const retailSubEl = document.getElementById('kpiRetail_sub');
+      if (latestRetail) {
+        retailEl.textContent = '₦' + fmtNumber(latestRetail.retail_ngn_per_litre, 2) + '/L';
+        if (retailSubEl) retailSubEl.textContent = 'NBS data';
+      } else {
+        retailEl.textContent = '—';
+      }
+
+      // History table
+      fillTable('marketHistoryTable', rows, ['date','import_parity_ngn_per_litre','retail_ngn_per_litre','usdngn_rate','dairy_fpi'], {
+        import_parity_ngn_per_litre: v => v != null ? fmtCurrency(v, 2) : '—',
+        retail_ngn_per_litre: v => (v == null || v === '') ? '—' : fmtCurrency(v, 2),
+        usdngn_rate: v => v != null ? '₦' + fmtNumber(v, 2) : '—',
+        dairy_fpi: v => v != null ? fmtNumber(v, 1) : '—'
+      });
+
+      // Charts — destroy existing instances first
+      if (charts.marketParityRetail) { charts.marketParityRetail.destroy(); charts.marketParityRetail = null; }
+      if (charts.marketFxWmp) { charts.marketFxWmp.destroy(); charts.marketFxWmp = null; }
+
+      const chartRows = rows.slice().reverse(); // oldest-first for charts
+      charts.marketParityRetail = new Chart(document.getElementById('marketParityRetailChart'), {
+        type: 'line',
+        data: {
+          labels: chartRows.map(r => r.date),
+          datasets: [
+            { label: 'Import parity (live)', data: chartRows.map(r => r.import_parity_ngn_per_litre), tension: .25, borderColor: '#0F4C75', borderWidth: 2, fill: false },
+            { label: 'NBS retail price (last: Oct 2024)', data: chartRows.map(r => r.retail_ngn_per_litre), tension: .25, borderColor: '#FFD166', borderWidth: 2, borderDash: [6, 4], fill: false, spanGaps: false }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  if (ctx.parsed.y == null) return ctx.dataset.label + ': no data';
+                  return ctx.dataset.label + ': ₦' + ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '/L';
+                }
+              }
+            }
+          }
+        }
+      });
+
+      charts.marketFxWmp = new Chart(document.getElementById('marketFxWmpChart'), {
+        type: 'line',
+        data: {
+          labels: chartRows.map(r => r.date),
+          datasets: [
+            { label: 'Exchange rate', data: chartRows.map(r => r.usdngn_rate), yAxisID: 'y', tension: .25, borderColor: '#3282B8', fill: false },
+            { label: 'FAO dairy index', data: chartRows.map(r => r.dairy_fpi), yAxisID: 'y1', tension: .25, borderColor: '#0F4C75', fill: false }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: { y: { position: 'left' }, y1: { position: 'right', grid: { drawOnChartArea: false } } },
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+
+      // Update status-pill freshness
+      if (data.pulled_at) {
+        const pill = document.querySelector('.status-pill');
+        if (pill) {
+          const ts = new Date(data.pulled_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+          pill.setAttribute('data-freshness', data.pulled_at);
+          const dot = pill.querySelector('.dot');
+          pill.innerHTML = `<span class='dot'></span>Data Live · ${ts}`;
+        }
+      }
+    } catch (err) {
+      console.warn('loadMarketData failed:', err);
+      ['kpiGlobalWmp','kpiImportParity','kpiExchangeRate','kpiRetail'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.textContent === 'Refreshing…') el.textContent = '—';
+      });
+    }
   }
 
+  function _setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+
   function updateKpis(metrics) {
-    document.getElementById('kpiGlobalWmp').textContent = fmtUsd(getScenario().globalMilkPriceUsdMt, 0) + '/MT';
-    document.getElementById('kpiImportParity').textContent = fmtCurrency(metrics.importParity, 2) + '/L';
-    document.getElementById('kpiExchangeRate').textContent = '₦' + fmtNumber(getScenario().exchangeRate, 2) + '/USD';
-    document.getElementById('kpiRetail').textContent = fmtCurrency(state.retail_price, 2) + '/L';
-    document.getElementById('kpiCostPerLitre').textContent = fmtCurrency(metrics.costPerLitre, 2) + '/L';
-    document.getElementById('kpiMarginVsImports').textContent = fmtCurrency(metrics.marginVsImports, 2) + '/L';
-    document.getElementById('kpiProfitPerCow').textContent = fmtCurrency(metrics.profitPerCow, 2) + '/day';
-    document.getElementById('kpiProfitPerHerd').textContent = fmtCurrency(metrics.profitPerHerd, 2) + '/day';
-    document.getElementById('breakEvenYield').textContent = fmtNumber(metrics.breakEvenYield, 2) + ' L/day';
-    document.getElementById('scenarioImportComparison').textContent = fmtCurrency(metrics.importParity - state.import_parity, 2) + ' vs baseline';
-    document.getElementById('profitSensitivityRange').textContent = fmtCurrency(metrics.profitPerHerd * 0.8, 0) + ' to ' + fmtCurrency(metrics.profitPerHerd * 1.2, 0);
+    _setText('kpiCostPerLitre',          fmtCurrency(metrics.costPerLitre, 2) + '/L');
+    _setText('kpiMarginVsImports',       fmtCurrency(metrics.marginVsImports, 2) + '/L');
+    _setText('kpiProfitPerCow',          fmtCurrency(metrics.profitPerCow, 2) + '/day');
+    _setText('kpiProfitPerHerd',         fmtCurrency(metrics.profitPerHerd, 2) + '/day');
+    _setText('breakEvenYield',           fmtNumber(metrics.breakEvenYield, 2) + ' L/day');
+    _setText('scenarioImportComparison', fmtCurrency(metrics.importParity - state.import_parity, 2) + ' vs baseline');
+    _setText('profitSensitivityRange',   fmtCurrency(metrics.profitPerHerd * 0.8, 0) + ' to ' + fmtCurrency(metrics.profitPerHerd * 1.2, 0));
   }
 
   function destroyCharts() { Object.values(charts).forEach(chart => chart?.destroy?.()); charts = {}; }
 
+  function _mkChart(id, config) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    return new Chart(el, config);
+  }
+
   function buildCharts(metrics) {
-    destroyCharts();
-    const marketRows = dashboardData.marketRows;
-    charts.marketParityRetail = new Chart(document.getElementById('marketParityRetailChart'), {
-      type:'line', data:{ labels:marketRows.map(r => r.date), datasets:[
-        { label:'Import parity', data:marketRows.map(r => r.import_parity_ngn_per_litre), tension:.25, borderColor:'#0F4C75' },
-        { label:'Retail price', data:marketRows.map(r => r.retail_ngn_per_litre), tension:.25, borderColor:'#FFD166' }
-      ] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
-    });
+    ['costBreakdown','feedSensitivity','yieldProfit','scenarioImport','breakEven'].forEach(k => { charts[k]?.destroy(); delete charts[k]; });
 
-    charts.marketFxWmp = new Chart(document.getElementById('marketFxWmpChart'), {
-      type:'line', data:{ labels:marketRows.map(r => r.date), datasets:[
-        { label:'Exchange rate', data:marketRows.map(r => r.usdngn_rate), yAxisID:'y', tension:.25, borderColor:'#3282B8' },
-        { label:'FAO dairy index', data:marketRows.map(r => r.dairy_fpi), yAxisID:'y1', tension:.25, borderColor:'#0F4C75' }
-      ] }, options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ position:'left' }, y1:{ position:'right', grid:{ drawOnChartArea:false } } }, plugins:{ legend:{ position:'bottom' } } }
-    });
-
-    charts.costBreakdown = new Chart(document.getElementById('farmCostBreakdownChart'), {
-      type:'doughnut', data:{ labels:['Feed','Labour','Veterinary','Overhead'], datasets:[{ data:[getScenario().feedCost, getScenario().labourCost, getScenario().vetCost, getScenario().overheadCost], backgroundColor:['#0F4C75','#3282B8','#B8D8EA','#FFD166'] }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
-    });
-
-    const feedSeries = [0.8,0.9,1.0,1.1,1.2,1.3].map(mult => {
-      const s = { ...getScenario(), feedCost:getScenario().feedCost * mult };
-      return calculateMetrics(s).profitPerHerd;
-    });
-    charts.feedSensitivity = new Chart(document.getElementById('farmFeedSensitivityChart'), {
-      type:'bar', data:{ labels:['-20%','-10%','Base','+10%','+20%','+30%'], datasets:[{ label:'Daily herd profit', data:feedSeries, backgroundColor:'#3282B8' }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } }
-    });
-
-    const yieldLabels = [4,5,6,7,8,9,10,11,12];
-    charts.yieldProfit = new Chart(document.getElementById('farmYieldProfitChart'), {
-      type:'line', data:{ labels:yieldLabels, datasets:[{ label:'Daily herd profit', data:yieldLabels.map(y => calculateMetrics({ ...getScenario(), milkYieldPerCow:y }).profitPerHerd), tension:.25, borderColor:'#0F4C75' }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
-    });
-
-    charts.scenarioImport = new Chart(document.getElementById('scenarioImportParityChart'), {
+    charts.scenarioImport = _mkChart('scenarioImportParityChart', {
       type:'bar', data:{ labels:['Baseline','Scenario'], datasets:[{ label:'Import parity (₦/L)', data:[state.import_parity, metrics.importParity], backgroundColor:['#B8D8EA','#0F4C75'] }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } }
     });
 
     const feedGrid = [350,400,450,500,550,600];
-    charts.breakEven = new Chart(document.getElementById('scenarioBreakEvenChart'), {
+    charts.breakEven = _mkChart('scenarioBreakEvenChart', {
       type:'line', data:{ labels:feedGrid, datasets:[{ label:'Break-even yield (L/day)', data:feedGrid.map(feed => calculateMetrics({ ...getScenario(), feedCost:feed }).breakEvenYield), tension:.25, borderColor:'#3282B8' }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
     });
   }
@@ -817,6 +727,65 @@
     });
   }
 
+  // ── Milk Production ──────────────────────────────────────────────────────
+  let milkDataStore = null;
+
+  async function loadMilkData(farmId) {
+    try {
+      const res = await fetch(`/api/farm/${farmId}/milk`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      milkDataStore = await res.json();
+    } catch (e) {
+      milkDataStore = null;
+      console.warn('Milk data unavailable:', e);
+    }
+    renderMilkSection();
+  }
+
+  function renderMilkSection() {
+    const avgEl   = document.getElementById('milkAvgYield');
+    const cowEl   = document.getElementById('milkCowCount');
+    const dateEl  = document.getElementById('milkDateRange');
+    const totalEl = document.getElementById('milkHerdTotal');
+    if (!milkDataStore) {
+      [avgEl, cowEl, dateEl, totalEl].forEach(el => { if (el) el.textContent = '—'; });
+      if (charts.herdMilk) { charts.herdMilk.destroy(); charts.herdMilk = null; }
+      return;
+    }
+    const s = milkDataStore.summary;
+    if (avgEl)   avgEl.textContent   = fmtNumber(s.avg_yield_l_per_cow_per_day, 2);
+    if (cowEl)   cowEl.textContent   = fmtNumber(s.total_cows, 0);
+    if (dateEl)  dateEl.textContent  = `${s.date_range[0]} → ${s.date_range[1]}`;
+    if (totalEl) totalEl.textContent = fmtNumber(s.avg_yield_l_per_cow_per_day * s.total_cows, 0);
+
+    const daily  = milkDataStore.daily ?? [];
+    const labels = daily.map(r => r.date);
+    const yields = daily.map(r => r.avg_yield);
+    const minY   = daily.map(r => r.min_yield);
+    const maxY   = daily.map(r => r.max_yield);
+
+    if (charts.herdMilk) charts.herdMilk.destroy();
+    charts.herdMilk = new Chart(document.getElementById('herdMilkYieldChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Max yield',  data: maxY,   borderColor: 'rgba(15,76,117,0.15)', backgroundColor: 'rgba(15,76,117,0.08)', fill: '+1', tension: 0.3, pointRadius: 0 },
+          { label: 'Avg yield',  data: yields, borderColor: '#0F4C75', backgroundColor: 'rgba(15,76,117,0.15)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+          { label: 'Min yield',  data: minY,   borderColor: 'rgba(15,76,117,0.15)', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+          x: { ticks: { maxRotation: 45, minRotation: 45, maxTicksLimit: 12 } },
+          y: { title: { display: true, text: 'L / cow / day' } }
+        }
+      }
+    });
+  }
+
   async function loadHerdData() {
     try {
       const response = await fetch('/api/herd/full', { cache: 'no-store' });
@@ -847,14 +816,252 @@
     buildProfitSurface();
   }
 
-  async function bootstrap() {
-    bindTabs();
-    bindSidebar();
-    buildMarketTable();
-    refreshDashboard();
-    await loadHerdData();
+  // ── Farm Overview ────────────────────────────────────────────────────────
+  let farmsIndex = null;
+  const compareChartInstances = {};
+
+  let activeFarmId = null;
+
+  async function loadFarmsIndex() {
+    try {
+      const res = await fetch('/api/farms', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      farmsIndex = await res.json();
+    } catch (e) {
+      console.warn('Could not load farms index:', e);
+      farmsIndex = null;
+    }
+  }
+
+  function populateFarmSelector() {
+    const sel = document.getElementById('farmSelector');
+    if (!sel || !farmsIndex?.farms?.length) return;
+    sel.innerHTML = farmsIndex.farms.map(f =>
+      `<option value='${f.farm_id}'>${f.name || f.farm_id}${f.location ? ' — ' + f.location : ''}</option>`
+    ).join('');
+    // Auto-select first farm
+    activeFarmId = farmsIndex.farms[0].farm_id;
+    updateFarmMeta(farmsIndex.farms[0]);
+    sel.addEventListener('change', async () => {
+      const farm = farmsIndex.farms.find(f => f.farm_id === sel.value);
+      activeFarmId = sel.value;
+      updateFarmMeta(farm);
+      await switchFarm(activeFarmId);
+    });
+  }
+
+  function updateFarmMeta(farm) {
+    const el = document.getElementById('farmSelectorMeta');
+    if (!el || !farm) return;
+    el.textContent = farm.animals ? `${farm.animals} animals · ${farm.records?.toLocaleString()} records · ${farm.date_range?.[0]} → ${farm.date_range?.[1]}` : '';
+  }
+
+  async function switchFarm(farmId) {
+    try {
+      const res = await fetch(`/api/farm/${farmId}/full`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      herdDataStore = await res.json();
+    } catch (e) {
+      console.warn('Failed to load farm data:', e);
+      return;
+    }
+    await loadMilkData(farmId);
     renderHerdIntelligence();
+    // Reset animal selector for new farm
+    const animalSel = document.getElementById('animalSelector');
+    if (animalSel) {
+      animalSel.innerHTML = '<option value="">— Select animal —</option>';
+      populateAnimalSelector();
+    }
+    document.getElementById('animalCharts').style.display = 'none';
+    document.getElementById('animalEmpty').style.display = 'block';
+    document.getElementById('animalEmpty').textContent = 'Select an animal above to view its behaviour.';
+  }
+
+  function renderFarmCards() {
+    const grid = document.getElementById('farmCardsGrid');
+    if (!grid || !farmsIndex) return;
+    const alertColor  = v => v > 5 ? '#ef4444' : v > 2 ? '#f59e0b' : '#0d7a47';
+    const qualColor   = v => v >= 95 ? '#0d7a47' : v >= 80 ? '#f59e0b' : '#ef4444';
+    grid.innerHTML = farmsIndex.farms.map(f => `
+      <section class='panel' style='cursor:pointer' onclick='openFarmHerd("${f.farm_id}")'>
+        <div class='panel-header'>
+          <div>
+            <h3 style='margin:0'>${f.name || f.farm_id}</h3>
+            <p style='margin:2px 0 0;color:#6b7280;font-size:0.82rem'>${f.location || ''}${f.region ? ' · ' + f.region : ''} &nbsp;·&nbsp; <code style='font-size:0.78rem'>${f.farm_id}</code></p>
+          </div>
+          <span style='font-size:0.75rem;background:#eef7f2;color:#0d7a47;border:1px solid #d1fadf;padding:3px 8px;border-radius:999px;font-weight:700'>Active</span>
+        </div>
+        <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-top:0.5rem'>
+          <div style='text-align:center'>
+            <div style='font-size:1.5rem;font-weight:700'>${f.animals ?? '—'}</div>
+            <div style='font-size:0.75rem;color:#6b7280'>Animals</div>
+          </div>
+          <div style='text-align:center'>
+            <div style='font-size:1.5rem;font-weight:700'>${f.records ? (f.records/1000).toFixed(1)+'k' : '—'}</div>
+            <div style='font-size:0.75rem;color:#6b7280'>Records</div>
+          </div>
+          <div style='text-align:center'>
+            <div style='font-size:1.5rem;font-weight:700;color:${qualColor(f.data_quality_pct)}'>${f.data_quality_pct != null ? f.data_quality_pct+'%' : '—'}</div>
+            <div style='font-size:0.75rem;color:#6b7280'>Data Quality</div>
+          </div>
+        </div>
+        <div style='display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #f3f4f6'>
+          <div><span style='font-size:0.75rem;color:#6b7280'>Health alerts</span>
+            <span style='margin-left:6px;font-weight:700;color:${alertColor(f.health_alert_count)}'>${f.health_alert_count ?? 0}</span></div>
+          <div><span style='font-size:0.75rem;color:#6b7280'>Estrus alerts</span>
+            <span style='margin-left:6px;font-weight:700;color:#f59e0b'>${f.estrus_alert_count ?? 0}</span></div>
+        </div>
+        <div style='margin-top:0.6rem;font-size:0.75rem;color:#9ca3af'>${f.date_range ? f.date_range[0] + ' → ' + f.date_range[1] : ''}</div>
+      </section>
+    `).join('');
+  }
+
+  function renderCompareCharts() {
+    if (!farmsIndex || !farmsIndex.farms.length) return;
+    const farms  = farmsIndex.farms;
+    const labels = farms.map(f => f.name || f.farm_id);
+    const COLORS = ['#0d7a47','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+    const mkBar  = (id, data, color, unit) => {
+      if (compareChartInstances[id]) compareChartInstances[id].destroy();
+      compareChartInstances[id] = new Chart(document.getElementById(id), {
+        type: 'bar',
+        data: { labels, datasets: [{ data, backgroundColor: farms.map((_,i) => COLORS[i % COLORS.length]) }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { title: { display: !!unit, text: unit } } }
+        }
+      });
+    };
+    mkBar('compareActivityChart',   farms.map(f => f.avg_activity_rate),   null, '%');
+    mkBar('compareRuminationChart', farms.map(f => f.avg_rumination_min),  null, 'min');
+    mkBar('compareHealthChart',     farms.map(f => f.health_alert_count),  null, 'count');
+    mkBar('compareQualityChart',    farms.map(f => f.data_quality_pct),    null, '%');
+  }
+
+  function openFarmHerd(farmId) {
+    // Switch to Farm Overview tab and scroll to Herd Intelligence
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
+    const tab  = document.querySelector('[data-tab="farm-overview"]');
+    const view = document.getElementById('farm-overview');
+    if (tab)  tab.classList.add('active');
+    if (view) view.classList.add('active');
+    document.querySelector('#farm-overview .kpi-grid')?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ── Individual Animal ─────────────────────────────────────────────────────
+  const animalChartInstances = {};
+
+  function populateAnimalSelector() {
+    const sel = document.getElementById('animalSelector');
+    if (!sel || !herdDataStore.coverage) return;
+    herdDataStore.coverage.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.animal_id;
+      opt.textContent = `${c.animal_id}  (${c.records} records)`;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', () => {
+      if (sel.value) loadAnimalCharts(sel.value);
+    });
+  }
+
+  async function loadAnimalCharts(animalId) {
+    document.getElementById('animalLoading').style.display = 'block';
+    document.getElementById('animalCharts').style.display = 'none';
+    document.getElementById('animalEmpty').style.display = 'none';
+    try {
+      const farmId = activeFarmId || 'farm_001';
+      const res = await fetch(`/api/farm/${farmId}/animal/${animalId}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { records } = await res.json();
+      const labels = records.map(r => r.timestamp);
+      const mkDataset = (label, key, color) => ({
+        label, data: records.map(r => r[key] ?? null),
+        borderColor: color, backgroundColor: color + '22',
+        borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true
+      });
+      const mkOpts = (title, unit) => ({
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, title: { display: true, text: title, font: { size: 13 } } },
+        scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { title: { display: !!unit, text: unit } } }
+      });
+      const pairs = [
+        ['animalActivityChart',    'Activity Rate (%)',          'activity_rate',            '#0d7a47', '%'],
+        ['animalRuminationChart',  'Rumination (min)',            'rumination_min',           '#3b82f6', 'min'],
+        ['animalEatingChart',      'Eating (min)',                'eating_min',               '#f59e0b', 'min'],
+        ['animalRestingChart',     'Resting (min)',               'resting_min',              '#8b5cf6', 'min'],
+        ['animalStandingChart',    'Standing (min)',              'standing_min',             '#06b6d4', 'min'],
+        ['animalSittingChart',     'Sitting (min)',               'sitting_min',              '#ec4899', 'min'],
+        ['animalCoughingChart',    'Coughing Count',              'coughing_count',           '#ef4444', 'count'],
+        ['animalHeatChart',        'Heat Detection Count',        'heat_detection_count',     '#f97316', 'count'],
+        ['animalMountingChart',    'Mounting Count',              'mounting_count',           '#a855f7', 'count'],
+        ['animalDataQualityChart', 'Data Collection Rate (%)',    'data_collection_rate_pct', '#64748b', '%'],
+      ];
+      pairs.forEach(([id, title, key, color, unit]) => {
+        if (animalChartInstances[id]) animalChartInstances[id].destroy();
+        animalChartInstances[id] = new Chart(document.getElementById(id), {
+          type: 'line',
+          data: { labels, datasets: [mkDataset(title, key, color)] },
+          options: mkOpts(title, unit)
+        });
+      });
+      document.getElementById('animalCharts').style.display = 'block';
+    } catch (e) {
+      document.getElementById('animalEmpty').textContent = `Failed to load data for ${animalId}: ${e.message}`;
+      document.getElementById('animalEmpty').style.display = 'block';
+    } finally {
+      document.getElementById('animalLoading').style.display = 'none';
+    }
+  }
+
+  async function refreshHerd() {
+    const farmId = activeFarmId || 'farm_001';
+    await Promise.all([loadHerdData(), loadMilkData(farmId), loadMarketData()]);
+    renderHerdIntelligence();
+    const statusPill = document.querySelector('.status-pill');
+    if (statusPill) {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const dot = statusPill.querySelector('.dot');
+      const isLive = dot && dot.style.background !== 'var(--warn)';
+      statusPill.innerHTML = `<span class='dot' ${isLive ? '' : "style='background:var(--warn)'"}></span>${isLive ? 'Data Live' : 'Data Cached'} · ${time}`;
+    }
+  }
+
+  async function checkAuth() {
+    const token = sessionStorage.getItem('auth_token');
+    if (!token) { window.location.replace('/login.html'); return false; }
+    try {
+      const res = await fetch('/api/auth/verify?token=' + encodeURIComponent(token));
+      if (!res.ok) { sessionStorage.removeItem('auth_token'); window.location.replace('/login.html'); return false; }
+    } catch {
+      // server unreachable — allow cached session to proceed
+    }
+    return true;
+  }
+
+  function logout() {
+    sessionStorage.removeItem('auth_token');
+    window.location.replace('/login.html');
+  }
+
+  async function bootstrap() {
+    if (!await checkAuth()) return;
+    bindTabs();
+    await loadMarketData();
+    refreshDashboard();
+    await Promise.all([loadHerdData(), loadFarmsIndex()]);
+    populateFarmSelector();
+    const defaultFarm = farmsIndex?.farms?.[0]?.farm_id || 'farm_001';
+    await loadMilkData(defaultFarm);
+    renderHerdIntelligence();
+    populateAnimalSelector();
+    renderFarmCards();
+    renderCompareCharts();
     setTimeout(() => document.getElementById('loadingOverlay').classList.add('hidden'), 300);
+    setInterval(refreshHerd, 30000);
   }
 
   window.addEventListener('load', bootstrap);
