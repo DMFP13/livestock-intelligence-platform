@@ -1,0 +1,6 @@
+farm_id,farm_name,state,breed_type,management_system,herd_size,avg_yield_l_per_day,lat,lon
+FARM-001,Jos Plateau Dairy,Plateau,Wadara crossbred,Semi-extensive,20,4.0,9.8965,8.8583
+FARM-002,Kaduna Semi-Intensive Farm,Kaduna,Friesian×Bunaji,Semi-intensive,30,9.5,10.5222,7.4383
+FARM-003,Sokoto Pastoralist Herd,Sokoto,Local Bunaji,Pastoralist,45,3.0,13.0059,5.2476
+FARM-004,Oyo Commercial Dairy,Oyo,Exotic Friesian,Commercial intensive,15,18.0,7.85,3.9333
+FARM-005,Plateau Smallholder Farm,Plateau,Mixed local,Smallholder,12,4.5,9.2182,9.5177
