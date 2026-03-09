@@ -93,7 +93,7 @@
         <div class='platform-title'>Livestock Intelligence Platform</div>
       </div>
       <nav class='topbar-center'>
-        <button class='nav-tab active' data-tab='farm-overview'>Farm Overview</button><button class='nav-tab' data-tab='market-signals'>Market Signals</button><button class='nav-tab' data-tab='scenario-lab'>Scenario Lab</button>
+        <button class='nav-tab active' data-tab='farm-overview'>Farm Overview</button><button class='nav-tab' data-tab='market-signals'>Market Signals</button><button class='nav-tab' data-tab='scenario-lab'>Scenario Lab</button><button class='nav-tab' data-tab='data-upload'>Upload Data</button>
       </nav>
       <div class='topbar-right'>
         <div class='status-pill'><span class='dot'></span>Data Live</div>
@@ -400,6 +400,85 @@
     </section>
     
       </section>
+
+      <!-- ── Upload Data tab ─────────────────────────────────────────── -->
+      <section class='content-view' id='data-upload'>
+        <div class='section-head'><div><h2>Upload Data</h2><p>Import new BODIT telemetry exports or milk robot records directly into the platform.</p></div></div>
+
+        <div class='grid-two' style='margin-bottom:16px'>
+
+          <!-- BODIT Telemetry upload -->
+          <section class='panel'>
+            <div class='panel-header'><div>
+              <h3>BODIT Telemetry</h3>
+              <p>Upload an Excel or CSV export from the BODIT cow sensor portal.</p>
+            </div></div>
+            <div style='margin-bottom:14px'>
+              <label class='control-label' style='margin-bottom:6px'>Farm</label>
+              <div class='input-wrap'><select id='telemetryFarmSelect' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></select></div>
+            </div>
+            <div id='telemetryDropZone' style='border:2px dashed var(--border);border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s' onclick="document.getElementById('telemetryFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--secondary)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleDrop(event,'telemetry')">
+              <div style='font-size:28px;margin-bottom:8px'>📡</div>
+              <div style='font-weight:700;color:var(--primary)'>Drop BODIT file here</div>
+              <div style='color:var(--muted);font-size:13px;margin-top:4px'>.xlsx or .csv · click to browse</div>
+              <div id='telemetryFileName' style='margin-top:10px;font-size:13px;color:var(--secondary);font-weight:700'></div>
+            </div>
+            <input type='file' id='telemetryFileInput' accept='.xlsx,.xls,.csv' style='display:none' onchange="fileSelected(this,'telemetry')">
+            <button class='action-btn' style='width:100%;margin-top:12px' onclick='submitUpload("telemetry")'>Upload &amp; Process</button>
+            <div id='telemetryUploadResult' style='margin-top:12px;display:none'></div>
+          </section>
+
+          <!-- Milk production upload -->
+          <section class='panel'>
+            <div class='panel-header'><div>
+              <h3>Milk Production</h3>
+              <p>Upload a CSV or Excel export from your milk robot or manual records.</p>
+            </div></div>
+            <div style='margin-bottom:14px'>
+              <label class='control-label' style='margin-bottom:6px'>Farm</label>
+              <div class='input-wrap'><select id='milkFarmSelect' style='width:100%;border:none;background:transparent;padding:10px 6px;outline:none;font-size:14px;color:var(--text)'></select></div>
+            </div>
+            <div id='milkDropZone' style='border:2px dashed var(--border);border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s' onclick="document.getElementById('milkFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--secondary)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleDrop(event,'milk')">
+              <div style='font-size:28px;margin-bottom:8px'>🥛</div>
+              <div style='font-weight:700;color:var(--primary)'>Drop milk data file here</div>
+              <div style='color:var(--muted);font-size:13px;margin-top:4px'>.xlsx or .csv · columns: cow_id, date, yield_l</div>
+              <div id='milkFileName' style='margin-top:10px;font-size:13px;color:var(--secondary);font-weight:700'></div>
+            </div>
+            <input type='file' id='milkFileInput' accept='.xlsx,.xls,.csv' style='display:none' onchange="fileSelected(this,'milk')">
+            <button class='action-btn' style='width:100%;margin-top:12px' onclick='submitUpload("milk")'>Upload &amp; Process</button>
+            <div id='milkUploadResult' style='margin-top:12px;display:none'></div>
+          </section>
+
+        </div>
+
+        <!-- Upload history / guidance -->
+        <section class='panel'>
+          <div class='panel-header'><div><h3>Format guide</h3><p>Expected file formats for each upload type.</p></div></div>
+          <div class='grid-two' style='gap:16px;margin-top:4px'>
+            <div>
+              <div style='font-weight:700;color:var(--primary);margin-bottom:8px'>BODIT Telemetry (.xlsx or .csv)</div>
+              <table style='font-size:12px'><thead><tr><th>Column</th><th>Example</th></tr></thead><tbody>
+                <tr><td>Cow ID</td><td>COW-10000245</td></tr>
+                <tr><td>Date</td><td>01/06/2025</td></tr>
+                <tr><td>Ruminating(min)</td><td>240.3</td></tr>
+                <tr><td>Activity Rate</td><td>57.4</td></tr>
+                <tr><td>Heat Detection(count)</td><td>0</td></tr>
+              </tbody></table>
+              <div style='color:var(--muted);font-size:12px;margin-top:8px'>New records are merged with existing data. Duplicates (same cow + date) are automatically removed.</div>
+            </div>
+            <div>
+              <div style='font-weight:700;color:var(--primary);margin-bottom:8px'>Milk Production (.xlsx or .csv)</div>
+              <table style='font-size:12px'><thead><tr><th>Column</th><th>Example</th></tr></thead><tbody>
+                <tr><td>cow_id (or animal_id)</td><td>COW-10000245</td></tr>
+                <tr><td>date (or day)</td><td>01/06/2025</td></tr>
+                <tr><td>yield_l (or milk / litres)</td><td>4.2</td></tr>
+              </tbody></table>
+              <div style='color:var(--muted);font-size:12px;margin-top:8px'>Column names are matched flexibly. New records are appended; existing cow+date combinations are not duplicated.</div>
+            </div>
+          </div>
+        </section>
+      </section>
+
     </main>
   </div>
 </div>
@@ -1047,6 +1126,81 @@
     window.location.replace('/login.html');
   }
 
+  // ── Upload UI ─────────────────────────────────────────────────────────────
+  const uploadFiles = { telemetry: null, milk: null };
+
+  function populateUploadSelectors() {
+    if (!farmsIndex?.farms?.length) return;
+    ['telemetryFarmSelect','milkFarmSelect'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = farmsIndex.farms.map(f =>
+        `<option value='${f.farm_id}'>${f.name || f.farm_id}</option>`
+      ).join('');
+    });
+  }
+
+  function fileSelected(input, type) {
+    const file = input.files[0];
+    if (!file) return;
+    uploadFiles[type] = file;
+    document.getElementById(`${type}FileName`).textContent = file.name;
+    const zone = document.getElementById(`${type}DropZone`);
+    zone.style.borderColor = 'var(--good)';
+    zone.style.background = 'rgba(23,178,106,0.05)';
+  }
+
+  function handleDrop(event, type) {
+    event.preventDefault();
+    const zone = document.getElementById(`${type}DropZone`);
+    zone.style.borderColor = 'var(--border)';
+    const file = event.dataTransfer.files[0];
+    if (!file) return;
+    uploadFiles[type] = file;
+    document.getElementById(`${type}FileName`).textContent = file.name;
+    zone.style.borderColor = 'var(--good)';
+    zone.style.background = 'rgba(23,178,106,0.05)';
+  }
+
+  async function submitUpload(type) {
+    const file = uploadFiles[type];
+    if (!file) { alert('Please select a file first.'); return; }
+    const farmId = document.getElementById(`${type}FarmSelect`).value;
+    if (!farmId) { alert('Please select a farm.'); return; }
+
+    const resultEl = document.getElementById(`${type}UploadResult`);
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div style='padding:12px;background:#f0f9ff;border-radius:10px;color:var(--primary);font-weight:700'>Uploading and processing…</div>`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const endpoint = `/api/farm/${farmId}/upload/${type === 'telemetry' ? 'telemetry' : 'milk'}`;
+    try {
+      const res = await fetch(endpoint, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      const s = data.summary;
+      const detail = type === 'telemetry'
+        ? `${data.new_records.toLocaleString()} new records · ${data.total_records.toLocaleString()} total · ${s.animals} animals`
+        : `${data.new_records.toLocaleString()} new records · ${data.total_records.toLocaleString()} total · avg ${s.avg_yield_l_per_cow_per_day} L/day · ${s.total_cows} cows`;
+      resultEl.innerHTML = `<div style='padding:12px;background:#eef7f2;border:1px solid #d1fadf;border-radius:10px;color:#0d7a47;font-weight:700'>✓ ${data.filename} processed<br><span style='font-weight:400;font-size:13px'>${detail}</span></div>`;
+      // Reset drop zone
+      const zone = document.getElementById(`${type}DropZone`);
+      zone.style.borderColor = 'var(--border)';
+      zone.style.background = '';
+      document.getElementById(`${type}FileName`).textContent = '';
+      uploadFiles[type] = null;
+      // Refresh live data
+      if (activeFarmId === farmId) {
+        await Promise.all([loadHerdData(), loadMilkData(farmId)]);
+        renderHerdIntelligence();
+      }
+    } catch (e) {
+      resultEl.innerHTML = `<div style='padding:12px;background:#fff0f0;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-weight:700'>✗ Upload failed<br><span style='font-weight:400;font-size:13px'>${e.message}</span></div>`;
+    }
+  }
+
   async function bootstrap() {
     if (!await checkAuth()) return;
     bindTabs();
@@ -1054,6 +1208,7 @@
     refreshDashboard();
     await Promise.all([loadHerdData(), loadFarmsIndex()]);
     populateFarmSelector();
+    populateUploadSelectors();
     const defaultFarm = farmsIndex?.farms?.[0]?.farm_id || 'farm_001';
     await loadMilkData(defaultFarm);
     renderHerdIntelligence();

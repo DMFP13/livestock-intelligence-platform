@@ -6,7 +6,9 @@ import os
 import threading
 import time
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Form
+import shutil
+import tempfile
+from fastapi import FastAPI, HTTPException, Form, UploadFile, File
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import pandas as pd
@@ -213,6 +215,180 @@ def milk_all_farms():
             "date_range": [df["date"].min(), df["date"].max()],
         })
     return JSONResponse({"farms": result})
+
+
+# ---------------------------------------------------------------------------
+# Upload endpoints
+# ---------------------------------------------------------------------------
+
+def _rebuild_herd(farm_id: str) -> dict:
+    """Re-run the full analytics pipeline for one farm and return summary."""
+    import sys
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from data.ingestion.telemetry.reconcile_datasets import reconcile_datasets
+    from data.validation.telemetry_validation import validate_telemetry
+    from analytics.herd.herd_metrics import herd_summary, daily_averages, records_per_animal, missingness, coverage_by_animal
+    from analytics.herd.alerts import add_prototype_alerts
+
+    out_dir = FARMS_DIR / farm_id
+    parquet = out_dir / "telemetry_events.parquet"
+    if not parquet.exists():
+        raise HTTPException(status_code=404, detail="No existing telemetry to rebuild from")
+
+    combined = pd.read_parquet(parquet)
+    validation = validate_telemetry(combined, combined)
+    enriched   = add_prototype_alerts(combined)
+
+    estrus_df = (
+        enriched[enriched["estrus_status"].isin(["HIGH","MEDIUM"])]
+        [["animal_id","timestamp","estrus_score","estrus_status"]]
+        .assign(timestamp=lambda x: x["timestamp"].dt.strftime("%Y-%m-%d"))
+        .sort_values(["estrus_score","timestamp"], ascending=[False,False])
+        .head(12)
+    )
+    health_df = (
+        enriched[enriched["health_status"].isin(["ALERT","WATCH"])]
+        [["animal_id","timestamp","health_score","health_status"]]
+        .assign(timestamp=lambda x: x["timestamp"].dt.strftime("%Y-%m-%d"))
+        .sort_values(["health_score","timestamp"], ascending=[False,False])
+        .head(12)
+    )
+
+    herd = {
+        "farm_id":        farm_id,
+        "summary":        herd_summary(combined),
+        "comparison":     {"merge_strategy": "single_file_rebuild", "overlap_animal_timestamp_pairs": 0,
+                           "same_animals": True, "file1_date_range": [], "file2_date_range": []},
+        "validation":     validation,
+        "daily_averages": daily_averages(combined).round(3).to_dict(orient="records"),
+        "records_per_animal": records_per_animal(combined).to_dict(orient="records"),
+        "missingness":    missingness(combined).to_dict(orient="records"),
+        "coverage":       coverage_by_animal(combined).to_dict(orient="records"),
+        "estrus_alerts":  estrus_df.to_dict(orient="records"),
+        "health_alerts":  health_df.to_dict(orient="records"),
+    }
+    (out_dir / "herd_data.json").write_text(json.dumps(herd, default=str))
+    return herd["summary"]
+
+
+@app.post("/api/farm/{farm_id}/upload/telemetry")
+async def upload_telemetry(farm_id: str, file: UploadFile = File(...)):
+    """Accept a BODIT Excel or CSV export, append to telemetry, rebuild herd analytics."""
+    _farm_dir(farm_id)  # 404 if farm doesn't exist
+    import sys
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from data.ingestion.telemetry.danone_loader import load_excel, load_csv
+    from data.ingestion.telemetry.reconcile_datasets import reconcile_datasets
+
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in {".xlsx", ".xls", ".csv"}:
+        raise HTTPException(status_code=400, detail="Only .xlsx, .xls, or .csv files accepted")
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        new_df = load_excel(tmp_path) if suffix in {".xlsx", ".xls"} else load_csv(tmp_path)
+    except Exception as e:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=f"Could not parse file: {e}")
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    out_dir = FARMS_DIR / farm_id
+    parquet  = out_dir / "telemetry_events.parquet"
+
+    if parquet.exists():
+        existing = pd.read_parquet(parquet)
+        combined = pd.concat([existing, new_df], ignore_index=True).drop_duplicates(
+            subset=["animal_id", "timestamp"]
+        )
+    else:
+        combined = new_df
+
+    combined.to_parquet(parquet, index=False)
+    summary = _rebuild_herd(farm_id)
+
+    return JSONResponse({
+        "status": "ok",
+        "farm_id": farm_id,
+        "filename": file.filename,
+        "new_records": len(new_df),
+        "total_records": len(combined),
+        "summary": summary,
+    })
+
+
+@app.post("/api/farm/{farm_id}/upload/milk")
+async def upload_milk(farm_id: str, file: UploadFile = File(...)):
+    """Accept a milk production CSV or Excel. Expected columns: cow_id, date, yield_l (or similar)."""
+    _farm_dir(farm_id)
+
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in {".xlsx", ".xls", ".csv"}:
+        raise HTTPException(status_code=400, detail="Only .xlsx, .xls, or .csv files accepted")
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        raw = pd.read_excel(tmp_path) if suffix in {".xlsx", ".xls"} else pd.read_csv(tmp_path)
+    except Exception as e:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=f"Could not parse file: {e}")
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    # Normalise column names flexibly
+    raw.columns = [c.strip().lower().replace(" ", "_") for c in raw.columns]
+    col_map = {}
+    for c in raw.columns:
+        if any(k in c for k in ("cow", "animal", "tag", "id")) and "cow_id" not in col_map.values():
+            col_map[c] = "cow_id"
+        elif any(k in c for k in ("date", "day", "time")) and "date" not in col_map.values():
+            col_map[c] = "date"
+        elif any(k in c for k in ("yield", "milk", "litre", "liter", "production", "volume")) and "yield_l" not in col_map.values():
+            col_map[c] = "yield_l"
+    raw = raw.rename(columns=col_map)
+
+    required = {"cow_id", "date", "yield_l"}
+    missing  = required - set(raw.columns)
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Could not identify columns: {missing}. Found: {list(raw.columns)}")
+
+    new_df = raw[["cow_id", "date", "yield_l"]].copy()
+    new_df["cow_id"]  = new_df["cow_id"].astype(str).str.strip()
+    new_df["date"]    = pd.to_datetime(new_df["date"], dayfirst=True, errors="coerce").dt.strftime("%Y-%m-%d")
+    new_df["yield_l"] = pd.to_numeric(new_df["yield_l"], errors="coerce")
+    new_df = new_df.dropna()
+
+    milk_file = FARMS_DIR / farm_id / "milk_production.csv"
+    if milk_file.exists():
+        existing = pd.read_csv(milk_file)
+        combined = pd.concat([existing, new_df], ignore_index=True).drop_duplicates(
+            subset=["cow_id", "date"]
+        )
+    else:
+        combined = new_df
+
+    combined.to_csv(milk_file, index=False)
+
+    return JSONResponse({
+        "status": "ok",
+        "farm_id": farm_id,
+        "filename": file.filename,
+        "new_records": len(new_df),
+        "total_records": len(combined),
+        "summary": {
+            "avg_yield_l_per_cow_per_day": round(combined["yield_l"].mean(), 3),
+            "total_cows": int(combined["cow_id"].nunique()),
+            "date_range": [combined["date"].min(), combined["date"].max()],
+        }
+    })
 
 
 # ---------------------------------------------------------------------------
