@@ -399,12 +399,13 @@ class PostgresStore:
         with self.connect() as conn:
             conn.execute(sql, values)
 
-    def _insert_many(self, table: str, rows: list[dict[str, Any]]) -> None:
-        """Bulk-insert rows that all share the same columns, in one connection/transaction."""
+    def _insert_many(self, table: str, rows: list[dict[str, Any]], batch_size: int = 2000) -> None:
+        """Bulk-insert rows that all share the same columns using multi-row VALUES batches,
+        so the round trip count is rows/batch_size rather than one per row (executemany in
+        psycopg still issues one Bind/Execute per row without explicit pipelining)."""
         if not rows:
             return
         keys = list(rows[0].keys())
-        placeholders = ",".join(["%s"] * len(keys))
         columns = ",".join(keys)
         update_cols = [k for k in keys if k != "id"]
         if update_cols:
@@ -412,14 +413,19 @@ class PostgresStore:
             conflict_clause = f"DO UPDATE SET {update_clause}"
         else:
             conflict_clause = "DO NOTHING"
-        sql = (
-            f"INSERT INTO {table} ({columns}) VALUES ({placeholders}) "
-            f"ON CONFLICT (id) {conflict_clause}"
-        )
-        values = [[row[k] for k in keys] for row in rows]
+
         with self.connect() as conn:
             with conn.cursor() as cur:
-                cur.executemany(sql, values)
+                for start in range(0, len(rows), batch_size):
+                    batch = rows[start : start + batch_size]
+                    row_placeholder = "(" + ",".join(["%s"] * len(keys)) + ")"
+                    values_sql = ",".join([row_placeholder] * len(batch))
+                    sql = (
+                        f"INSERT INTO {table} ({columns}) VALUES {values_sql} "
+                        f"ON CONFLICT (id) {conflict_clause}"
+                    )
+                    flat_values = [row[k] for row in batch for k in keys]
+                    cur.execute(sql, flat_values)
 
     @staticmethod
     def _json(data: dict[str, Any] | None) -> str:
