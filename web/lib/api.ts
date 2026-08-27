@@ -9,10 +9,34 @@ async function apiGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`POST ${path} failed (${res.status}): ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body: form });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`POST ${path} failed (${res.status}): ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export type Farm = {
   id: string;
   name?: string;
   organization_id?: string;
+  location_text?: string;
+  metadata_json?: string;
   [key: string]: unknown;
 };
 
@@ -20,8 +44,8 @@ export type Observation = {
   id: string;
   farm_id?: string;
   animal_id?: string | null;
-  metric_key?: string;
-  value?: number;
+  metric?: string;
+  value_num?: number;
   observed_at?: string;
   quality_flag?: string;
   source_system?: string;
@@ -42,24 +66,114 @@ export type DataQualitySummary = {
   quality_flags: Record<string, number>;
 };
 
+export type OverviewPayload = {
+  cards: Record<string, string>;
+  system_cards: { title: string; value: string; status: string; color: string; icon: string }[];
+  [key: string]: unknown;
+};
+
+export type MarketFinancePayload = {
+  status: string;
+  message?: string;
+  summary_df?: Record<string, unknown>[];
+  milk_vs_feed_chart?: Record<string, unknown>[];
+  profitability_metrics?: Record<string, unknown>;
+  profitability_outlook?: string;
+  [key: string]: unknown;
+};
+
+export type FeedEnvironmentPayload = {
+  status: string;
+  message?: string;
+  timeseries?: Record<string, unknown>[];
+  current_metrics?: Record<string, unknown>[];
+  remote_sensing?: Record<string, unknown>;
+  live_weather?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type FarmProfilePayload = Record<string, unknown> | null;
+export type AnimalProfilePayload = Record<string, unknown> | null;
+
 export function fetchFarms() {
   return apiGet<{ farms: Farm[] }>("/farms").then((r) => r.farms);
 }
 
-export function fetchObservations(limit = 200) {
-  return apiGet<{ observations: Observation[] }>(`/observations?limit=${limit}`).then(
-    (r) => r.observations,
-  );
+export function createFarm(input: {
+  name: string;
+  location?: string;
+  region?: string;
+  species?: string;
+  sensorSystem?: string;
+  contact?: string;
+  notes?: string;
+}) {
+  return apiPostJson<Farm>("/farms", input);
 }
 
-export function fetchAlerts(limit = 200) {
-  return apiGet<{ alerts: Alert[] }>(`/alerts?limit=${limit}`).then((r) => r.alerts);
+export function fetchObservations(opts: { limit?: number; farmId?: string } = {}) {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.farmId) params.set("farm_id", opts.farmId);
+  return apiGet<{ observations: Observation[] }>(`/observations?${params}`).then((r) => r.observations);
+}
+
+export function fetchAnimals(opts: { limit?: number; farmId?: string } = {}) {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.farmId) params.set("farm_id", opts.farmId);
+  return apiGet<{ animals: Record<string, unknown>[] }>(`/animals?${params}`).then((r) => r.animals);
+}
+
+export function fetchAlerts(opts: { limit?: number; farmId?: string } = {}) {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.farmId) params.set("farm_id", opts.farmId);
+  return apiGet<{ alerts: Alert[] }>(`/alerts?${params}`).then((r) => r.alerts);
 }
 
 export function fetchDataQuality() {
   return apiGet<DataQualitySummary>("/data-quality");
 }
 
-export function fetchHealth() {
-  return apiGet<{ status: string }>("/health");
+export function fetchOverview(farmId?: string) {
+  const q = farmId ? `?farm_id=${encodeURIComponent(farmId)}` : "";
+  return apiGet<OverviewPayload>(`/overview${q}`);
+}
+
+export function fetchFarmProfile(farmId: string) {
+  return apiGet<FarmProfilePayload>(`/farms/${encodeURIComponent(farmId)}/profile`).catch(() => null);
+}
+
+export function fetchMarketFinance() {
+  return apiGet<MarketFinancePayload>("/market-finance");
+}
+
+export function fetchFeedEnvironment(farmId?: string) {
+  const q = farmId ? `?farm_id=${encodeURIComponent(farmId)}` : "";
+  return apiGet<FeedEnvironmentPayload>(`/feed-environment${q}`);
+}
+
+export function fetchAnimalProfile(animalId: string) {
+  return apiGet<AnimalProfilePayload>(`/animals/${encodeURIComponent(animalId)}/profile`).catch(() => null);
+}
+
+export function fetchAnimalTimeseries(animalId: string, metrics: string[]) {
+  const q = metrics.length ? `?metrics=${encodeURIComponent(metrics.join(","))}` : "";
+  return apiGet<{ records: Record<string, unknown>[] }>(
+    `/animals/${encodeURIComponent(animalId)}/timeseries${q}`,
+  ).then((r) => r.records);
+}
+
+export function fetchOutcomes() {
+  return apiGet<Record<string, unknown>>("/outcomes");
+}
+
+export function uploadTelemetry(input: { file: File; farmId: string; connectorKey: string; sourceSystem: string }) {
+  const form = new FormData();
+  form.set("file", input.file);
+  form.set("farm_id", input.farmId);
+  form.set("connector_key", input.connectorKey);
+  form.set("source_system", input.sourceSystem);
+  return apiPostForm<Record<string, unknown>>("/ingestion/upload", form);
 }

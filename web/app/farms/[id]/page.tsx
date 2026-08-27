@@ -1,67 +1,159 @@
 import Link from "next/link";
-import { fetchAlerts, fetchObservations } from "@/lib/api";
+import { fetchFarmProfile, fetchFeedEnvironment } from "@/lib/api";
+import { Badge, EmptyState, KpiCard, Panel, Table } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
+const GRADE_TONE: Record<string, "green" | "yellow" | "red" | "neutral"> = {
+  A: "green",
+  B: "green",
+  C: "yellow",
+  D: "yellow",
+  E: "red",
+};
+
 export default async function FarmDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [observations, alerts] = await Promise.all([fetchObservations(1000), fetchAlerts(200)]);
+  const [profile, feedEnv] = await Promise.all([fetchFarmProfile(id), fetchFeedEnvironment(id)]);
 
-  const farmObservations = observations.filter((o) => String(o.farm_id) === id);
-  const farmAlerts = alerts.filter((a) => String(a.farm_id) === id);
-
-  const byMetric = new Map<string, number>();
-  for (const obs of farmObservations) {
-    const key = String(obs.metric_key ?? "unknown");
-    byMetric.set(key, (byMetric.get(key) ?? 0) + 1);
+  if (!profile) {
+    return (
+      <div className="space-y-4">
+        <Link href="/" className="text-sm text-[var(--primary)] hover:underline">
+          &larr; Farm Overview
+        </Link>
+        <Panel>
+          <EmptyState message={`No data available yet for ${id}. Upload telemetry from the Upload Data tab.`} />
+        </Panel>
+      </div>
+    );
   }
 
+  const header = profile.header as Record<string, unknown>;
+  const rating = profile.farm_rating as { grade: string; index: number };
+  const pressure = profile.farm_action_pressure as { score: number; band: string };
+  const burden = profile.burden_metrics as Record<string, number>;
+  const distribution = (profile.rating_distribution_summary as Record<string, unknown>[]) ?? [];
+  const topPerformers = (profile.top_performers as Record<string, unknown>[]) ?? [];
+  const reviewCows = (profile.top_review_priority_cows as Record<string, unknown>[]) ?? [];
+  const drivers = (profile.pressure_drivers as string[]) ?? [];
+
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <Link href="/" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
-        &larr; Portfolio
-      </Link>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{id}</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-        {farmObservations.length} observations, {farmAlerts.length} alerts.
-      </p>
+    <div className="space-y-8">
+      <div>
+        <Link href="/" className="text-sm text-[var(--primary)] hover:underline">
+          &larr; Farm Overview
+        </Link>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+            {String(header.farm_name ?? id)}
+          </h1>
+          <Badge tone={GRADE_TONE[rating.grade] ?? "neutral"}>Grade {rating.grade}</Badge>
+          <Badge tone={pressure.band === "low" ? "green" : pressure.band === "watch" ? "yellow" : "red"}>
+            {pressure.band} pressure
+          </Badge>
+        </div>
+        <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+          {String(header.cow_count)} animals tracked · {String(header.records)} records
+        </p>
+      </div>
 
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-medium">Observations by metric</h2>
-        {byMetric.size === 0 ? (
-          <p className="text-sm text-neutral-500">No observations for this farm yet.</p>
-        ) : (
-          <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 text-sm dark:divide-neutral-800 dark:border-neutral-800">
-            {[...byMetric.entries()].map(([metric, count]) => (
-              <li key={metric} className="flex justify-between px-4 py-2">
-                <span>{metric}</span>
-                <span className="text-neutral-500">{count}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <KpiCard label="Farm rating index" value={rating.index.toFixed(1)} />
+        <KpiCard label="Action pressure score" value={pressure.score.toFixed(1)} />
+        <KpiCard
+          label="Avg milk yield"
+          value={header.avg_milk_yield_l != null ? `${header.avg_milk_yield_l} L` : "n/a"}
+        />
+        <KpiCard
+          label="Anomaly burden"
+          value={burden?.anomaly_burden_pct != null ? `${burden.anomaly_burden_pct}%` : "n/a"}
+        />
       </section>
 
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-medium">Alerts</h2>
-        {farmAlerts.length === 0 ? (
-          <p className="text-sm text-neutral-500">No open alerts.</p>
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {farmAlerts.map((alert) => (
-              <li
-                key={alert.id}
-                className="rounded-lg border border-neutral-200 px-4 py-2 dark:border-neutral-800"
-              >
-                <span className="mr-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                  {String(alert.severity ?? "info")}
-                </span>
-                {String(alert.message ?? alert.id)}
-              </li>
+      {drivers.length > 0 && (
+        <Panel title="Pressure drivers">
+          <div className="flex flex-wrap gap-2">
+            {drivers.map((d) => (
+              <Badge key={d} tone="yellow">
+                {d.replace(/_/g, " ")}
+              </Badge>
             ))}
-          </ul>
+          </div>
+        </Panel>
+      )}
+
+      <Panel title="Cow rating distribution">
+        {distribution.length === 0 ? (
+          <EmptyState message="No cow-level ratings yet." />
+        ) : (
+          <div className="flex items-end gap-3">
+            {distribution.map((d) => {
+              const pct = Number(d.pct ?? 0);
+              return (
+                <div key={String(d.rating)} className="flex flex-1 flex-col items-center gap-1">
+                  <div className="text-xs text-[var(--foreground-muted)]">{String(d.count)}</div>
+                  <div
+                    className="w-full rounded-t bg-[var(--primary)]"
+                    style={{ height: `${Math.max(4, pct * 1.2)}px` }}
+                  />
+                  <div className="text-xs font-medium">{String(d.rating)}</div>
+                </div>
+              );
+            })}
+          </div>
         )}
-      </section>
-    </main>
+      </Panel>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Panel title="Top performers">
+          <Table
+            columns={[
+              { key: "animal_id", label: "Animal" },
+              { key: "cow_rating", label: "Rating" },
+              { key: "milk_yield_l", label: "Milk (L)" },
+              { key: "data_confidence_score", label: "Confidence" },
+            ]}
+            rows={topPerformers.map((r) => ({
+              animal_id: (
+                <Link className="text-[var(--primary)] hover:underline" href={`/animals/${r.animal_id}`}>
+                  {String(r.animal_id)}
+                </Link>
+              ),
+              cow_rating: String(r.cow_rating ?? ""),
+              milk_yield_l: r.milk_yield_l != null ? String(r.milk_yield_l) : "—",
+              data_confidence_score: r.data_confidence_score != null ? String(r.data_confidence_score) : "—",
+            }))}
+          />
+        </Panel>
+
+        <Panel title="Needs review">
+          <Table
+            columns={[
+              { key: "animal_id", label: "Animal" },
+              { key: "health_risk_band", label: "Health risk" },
+              { key: "review_priority_band", label: "Priority" },
+            ]}
+            rows={reviewCows.map((r) => ({
+              animal_id: (
+                <Link className="text-[var(--primary)] hover:underline" href={`/animals/${r.animal_id}`}>
+                  {String(r.animal_id)}
+                </Link>
+              ),
+              health_risk_band: String(r.health_risk_band ?? ""),
+              review_priority_band: String(r.review_priority_band ?? ""),
+            }))}
+          />
+        </Panel>
+      </div>
+
+      {feedEnv && feedEnv.status !== "empty" && (
+        <Panel title="Feed & environment">
+          <p className="text-sm text-[var(--foreground-muted)]">
+            {(feedEnv.remote_sensing as Record<string, unknown> | undefined)?.message as string}
+          </p>
+        </Panel>
+      )}
+    </div>
   );
 }
