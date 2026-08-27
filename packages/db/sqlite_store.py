@@ -404,6 +404,18 @@ class SQLiteStore:
         with self.connect() as conn:
             conn.execute(sql, values)
 
+    def _insert_many(self, table: str, rows: list[dict[str, Any]]) -> None:
+        """Bulk-insert rows that all share the same columns, in one connection/transaction."""
+        if not rows:
+            return
+        keys = list(rows[0].keys())
+        placeholders = ",".join(["?"] * len(keys))
+        columns = ",".join(keys)
+        sql = f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholders})"
+        values = [[row[k] for k in keys] for row in rows]
+        with self.connect() as conn:
+            conn.executemany(sql, values)
+
     @staticmethod
     def _json(data: dict[str, Any] | None) -> str:
         return json.dumps(data or {}, default=str)
@@ -414,6 +426,12 @@ class SQLiteStore:
 
     def upsert_observation(self, row: dict[str, Any]) -> None:
         self._insert("observations", row)
+
+    def upsert_observations_bulk(self, rows: list[dict[str, Any]]) -> None:
+        self._insert_many("observations", rows)
+
+    def upsert_events_bulk(self, rows: list[dict[str, Any]]) -> None:
+        self._insert_many("events", rows)
 
     def upsert_event(self, row: dict[str, Any]) -> None:
         self._insert("events", row)

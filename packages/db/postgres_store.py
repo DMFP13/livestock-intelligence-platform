@@ -399,6 +399,28 @@ class PostgresStore:
         with self.connect() as conn:
             conn.execute(sql, values)
 
+    def _insert_many(self, table: str, rows: list[dict[str, Any]]) -> None:
+        """Bulk-insert rows that all share the same columns, in one connection/transaction."""
+        if not rows:
+            return
+        keys = list(rows[0].keys())
+        placeholders = ",".join(["%s"] * len(keys))
+        columns = ",".join(keys)
+        update_cols = [k for k in keys if k != "id"]
+        if update_cols:
+            update_clause = ",".join(f"{k}=EXCLUDED.{k}" for k in update_cols)
+            conflict_clause = f"DO UPDATE SET {update_clause}"
+        else:
+            conflict_clause = "DO NOTHING"
+        sql = (
+            f"INSERT INTO {table} ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT (id) {conflict_clause}"
+        )
+        values = [[row[k] for k in keys] for row in rows]
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(sql, values)
+
     @staticmethod
     def _json(data: dict[str, Any] | None) -> str:
         return json.dumps(data or {}, default=str)
@@ -409,6 +431,12 @@ class PostgresStore:
 
     def upsert_observation(self, row: dict[str, Any]) -> None:
         self._insert("observations", row)
+
+    def upsert_observations_bulk(self, rows: list[dict[str, Any]]) -> None:
+        self._insert_many("observations", rows)
+
+    def upsert_events_bulk(self, rows: list[dict[str, Any]]) -> None:
+        self._insert_many("events", rows)
 
     def upsert_event(self, row: dict[str, Any]) -> None:
         self._insert("events", row)

@@ -233,16 +233,26 @@ class SensorUploadConnector:
 
     def upsert(self, normalized: dict[str, list[dict[str, Any]]], context: ConnectorContext, store: Any, run_id: str) -> int:
         del context
-        written = 0
-        for row in normalized.get("observations", []):
+        observations = normalized.get("observations", [])
+        events = normalized.get("events", [])
+        for row in observations:
             row["ingestion_run_id"] = run_id
-            store.upsert_observation(row)
-            written += 1
-        for row in normalized.get("events", []):
+        for row in events:
             row["ingestion_run_id"] = run_id
-            store.upsert_event(row)
-            written += 1
-        return written
+
+        if hasattr(store, "upsert_observations_bulk"):
+            store.upsert_observations_bulk(observations)
+        else:
+            for row in observations:
+                store.upsert_observation(row)
+
+        if hasattr(store, "upsert_events_bulk"):
+            store.upsert_events_bulk(events)
+        else:
+            for row in events:
+                store.upsert_event(row)
+
+        return len(observations) + len(events)
 
     @staticmethod
     def _parse_timestamp(value: str) -> datetime | None:
