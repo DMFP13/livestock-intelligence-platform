@@ -20,11 +20,13 @@ from services.overview_queries import build_overview_payload
 OUTCOME_WINDOW = 14
 OUTCOME_MIN_OBS = 7
 
-# Pulling+pivoting the full observation set (and, worse, running outcome/state-timeseries
-# analysis over it) is CPU-heavy enough on a free-tier instance to blow past client timeouts
-# (Vercel's serverless function limit, Render's own edge timeout) if redone on every request.
-# Short TTL cache so back-to-back page loads (portfolio -> farm -> animal) reuse the same pull.
-_CACHE_TTL_SECONDS = 30
+# Pulling+pivoting the full observation set is fine, but compute_state_timeseries's row-by-row
+# .iterrows() scoring loop (services/outcome_analysis.py) takes ~50s+ at this data volume on the
+# free-tier instance's CPU -- long enough to blow past client timeouts (Vercel's serverless
+# function limit, Render's own edge timeout) on every single request. A short TTL is pointless
+# here since it would expire before the computation it's caching even finishes; cache for a long
+# time instead (bust-on-ingest already keeps it fresh when data actually changes).
+_CACHE_TTL_SECONDS = 1800
 _df_cache: dict[str, Any] = {"value": None, "at": 0.0}
 _outcome_cache: dict[str, Any] = {"value": None, "at": 0.0}
 
@@ -65,12 +67,8 @@ def json_safe(obj: Any) -> Any:
 def load_canonical_df(service: PlatformService) -> pd.DataFrame:
     now = time.monotonic()
     if _df_cache["value"] is not None and now - _df_cache["at"] < _CACHE_TTL_SECONDS:
-        print(f"[timing] load_canonical_df CACHE HIT age_s={now - _df_cache['at']:.2f}")
         return _df_cache["value"]
-    t0 = time.monotonic()
     df = query_canonical_observations(service)
-    t1 = time.monotonic()
-    print(f"[timing] load_canonical_df CACHE MISS total_s={t1 - t0:.2f} rows={len(df)}")
     _df_cache["value"] = df
     _df_cache["at"] = now
     return df
