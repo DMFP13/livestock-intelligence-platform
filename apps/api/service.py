@@ -226,11 +226,19 @@ class PlatformService:
         farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
         if not self._is_global_actor(actor) and not org_scope and not farm_scope:
             return []
-        rows = self.store.fetch_rows_scoped("observations", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
+        if farm_id:
+            # Push the farm filter into SQL (indexed) instead of fetching the whole table and
+            # filtering in Python -- the difference between a few hundred ms and tens of seconds
+            # once the observations table has real data volume.
+            rows = self.store.fetch_rows_by_farm("observations", farm_id, limit=limit)
+            if not self._is_global_actor(actor):
+                rows = [r for r in rows if str(r.get("farm_id")) in farm_scope]
+        else:
+            rows = self.store.fetch_rows_scoped(
+                "observations", limit=limit, organization_ids=org_scope, farm_ids=farm_scope
+            )
         if actor.has_role("government_analyst"):
             rows = [r for r in rows if not r.get("animal_id")]
-        if farm_id:
-            rows = [r for r in rows if str(r.get("farm_id")) == str(farm_id)]
         return rows
 
     def list_events(self, limit: int = 200) -> list[dict[str, Any]]:

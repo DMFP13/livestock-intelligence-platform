@@ -508,6 +508,17 @@ class PostgresStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def fetch_rows_by_farm(self, table: str, farm_id: str, limit: int = 200000) -> list[dict[str, Any]]:
+        """Push the farm_id filter into SQL (uses idx_observations_farm_id) instead of
+        fetching the whole table and filtering in Python."""
+        with self.connect() as conn:
+            order_col = self._order_column(conn, table)
+            rows = conn.execute(
+                f"SELECT * FROM {table} WHERE farm_id = %s ORDER BY {order_col} DESC LIMIT %s",
+                (farm_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def fetch_rows_scoped(
         self,
         table: str,

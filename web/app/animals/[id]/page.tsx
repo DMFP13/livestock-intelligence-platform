@@ -15,11 +15,18 @@ const GRADE_TONE: Record<string, "green" | "yellow" | "red" | "neutral"> = {
   E: "red",
 };
 
-export default async function AnimalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AnimalDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ farm?: string }>;
+}) {
   const { id } = await params;
+  const { farm: farmId } = await searchParams;
   const [profile, timeseries] = await Promise.all([
-    fetchAnimalProfile(id),
-    fetchAnimalTimeseries(id, BEHAVIOR_METRICS),
+    fetchAnimalProfile(id, farmId),
+    fetchAnimalTimeseries(id, BEHAVIOR_METRICS, farmId),
   ]);
 
   if (!profile) {

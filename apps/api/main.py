@@ -166,17 +166,17 @@ def feed_environment(farm_id: str | None = None) -> dict[str, Any]:
 
 
 @app.get("/animals/{animal_id}/profile")
-def animal_profile(animal_id: str) -> dict[str, Any]:
-    payload = analytics.build_animal_profile(service, animal_id)
+def animal_profile(animal_id: str, farm_id: str | None = None) -> dict[str, Any]:
+    payload = analytics.build_animal_profile(service, animal_id, farm_id=farm_id)
     if payload is None:
         return JSONResponse(status_code=404, content={"error": "animal not found or has no data"})
     return payload
 
 
 @app.get("/animals/{animal_id}/timeseries")
-def animal_timeseries(animal_id: str, metrics: str = "") -> dict[str, Any]:
+def animal_timeseries(animal_id: str, metrics: str = "", farm_id: str | None = None) -> dict[str, Any]:
     metric_list = [m for m in metrics.split(",") if m]
-    return analytics.build_animal_timeseries(service, animal_id, metric_list)
+    return analytics.build_animal_timeseries(service, animal_id, metric_list, farm_id=farm_id)
 
 
 @app.get("/outcomes")

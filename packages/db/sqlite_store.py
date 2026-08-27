@@ -484,6 +484,22 @@ class SQLiteStore:
             rows = conn.execute(f"SELECT * FROM {table} ORDER BY {order_col} DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
+    def fetch_rows_by_farm(self, table: str, farm_id: str, limit: int = 200000) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
+            col_names = {c["name"] for c in cols}
+            if "created_at" in col_names:
+                order_col = "created_at"
+            elif "started_at" in col_names:
+                order_col = "started_at"
+            else:
+                order_col = "id"
+            rows = conn.execute(
+                f"SELECT * FROM {table} WHERE farm_id = ? ORDER BY {order_col} DESC LIMIT ?",
+                (farm_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def fetch_rows_scoped(
         self,
         table: str,

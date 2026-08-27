@@ -117,7 +117,7 @@ export default async function FarmDetailPage({ params }: { params: Promise<{ id:
             ]}
             rows={topPerformers.map((r) => ({
               animal_id: (
-                <Link className="text-[var(--primary)] hover:underline" href={`/animals/${r.animal_id}`}>
+                <Link className="text-[var(--primary)] hover:underline" href={`/animals/${r.animal_id}?farm=${id}`}>
                   {String(r.animal_id)}
                 </Link>
               ),
@@ -137,7 +137,7 @@ export default async function FarmDetailPage({ params }: { params: Promise<{ id:
             ]}
             rows={reviewCows.map((r) => ({
               animal_id: (
-                <Link className="text-[var(--primary)] hover:underline" href={`/animals/${r.animal_id}`}>
+                <Link className="text-[var(--primary)] hover:underline" href={`/animals/${r.animal_id}?farm=${id}`}>
                   {String(r.animal_id)}
                 </Link>
               ),

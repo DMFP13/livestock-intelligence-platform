@@ -154,12 +154,16 @@ export function fetchFeedEnvironment(farmId?: string) {
   return apiGet<FeedEnvironmentPayload>(`/feed-environment${q}`);
 }
 
-export function fetchAnimalProfile(animalId: string) {
-  return apiGet<AnimalProfilePayload>(`/animals/${encodeURIComponent(animalId)}/profile`).catch(() => null);
+export function fetchAnimalProfile(animalId: string, farmId?: string) {
+  const q = farmId ? `?farm_id=${encodeURIComponent(farmId)}` : "";
+  return apiGet<AnimalProfilePayload>(`/animals/${encodeURIComponent(animalId)}/profile${q}`).catch(() => null);
 }
 
-export function fetchAnimalTimeseries(animalId: string, metrics: string[]) {
-  const q = metrics.length ? `?metrics=${encodeURIComponent(metrics.join(","))}` : "";
+export function fetchAnimalTimeseries(animalId: string, metrics: string[], farmId?: string) {
+  const params = new URLSearchParams();
+  if (metrics.length) params.set("metrics", metrics.join(","));
+  if (farmId) params.set("farm_id", farmId);
+  const q = params.toString() ? `?${params}` : "";
   return apiGet<{ records: Record<string, unknown>[] }>(
     `/animals/${encodeURIComponent(animalId)}/timeseries${q}`,
   ).then((r) => r.records);
