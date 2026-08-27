@@ -19,6 +19,24 @@ async function apiGet<T>(path: string): Promise<T> {
   }
 }
 
+// Like apiGet, but a genuine 404 (resource not found) resolves to null instead of throwing --
+// callers can still tell that apart from a timeout/network failure, which rethrows.
+async function apiGetOrNull<T>(path: string): Promise<T | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store", signal: controller.signal });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`GET ${path} failed (${res.status}): ${body}`);
+    }
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
@@ -152,7 +170,7 @@ export function fetchOverview(farmId?: string) {
 }
 
 export function fetchFarmProfile(farmId: string) {
-  return apiGet<FarmProfilePayload>(`/farms/${encodeURIComponent(farmId)}/profile`).catch(() => null);
+  return apiGetOrNull<FarmProfilePayload>(`/farms/${encodeURIComponent(farmId)}/profile`);
 }
 
 export function fetchMarketFinance() {
@@ -166,7 +184,7 @@ export function fetchFeedEnvironment(farmId?: string) {
 
 export function fetchAnimalProfile(animalId: string, farmId?: string) {
   const q = farmId ? `?farm_id=${encodeURIComponent(farmId)}` : "";
-  return apiGet<AnimalProfilePayload>(`/animals/${encodeURIComponent(animalId)}/profile${q}`).catch(() => null);
+  return apiGetOrNull<AnimalProfilePayload>(`/animals/${encodeURIComponent(animalId)}/profile${q}`);
 }
 
 export function fetchAnimalTimeseries(animalId: string, metrics: string[], farmId?: string) {
