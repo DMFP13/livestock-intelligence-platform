@@ -104,7 +104,14 @@ async def create_farm(request: Request) -> dict[str, Any]:
         contact=payload.get("contact"),
         notes=payload.get("notes"),
         organization_id=payload.get("organizationId") or "ORG-001",
+        farm_id=payload.get("id"),
     )
+
+
+@app.delete("/farms/{farm_id}")
+def delete_farm(farm_id: str) -> dict[str, Any]:
+    service.delete_farm(farm_id)
+    return {"deleted": farm_id}
 
 
 @app.get("/animals")

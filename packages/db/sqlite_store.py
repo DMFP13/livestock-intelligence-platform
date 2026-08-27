@@ -433,6 +433,10 @@ class SQLiteStore:
     def upsert_farm(self, row: dict[str, Any]) -> None:
         self._insert("farms", row)
 
+    def delete_farm(self, farm_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute("DELETE FROM farms WHERE id=?", (farm_id,))
+
     def create_run(self, row: dict[str, Any]) -> None:
         self._insert("ingestion_runs", row)
 

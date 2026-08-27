@@ -172,10 +172,11 @@ class PlatformService:
         contact: str | None = None,
         notes: str | None = None,
         organization_id: str = "ORG-001",
+        farm_id: str | None = None,
         principal: AuthPrincipal | None = None,
     ) -> dict[str, Any]:
         self._require("manage_source_configs", principal=principal, organization_id=organization_id)
-        farm_id = f"FARM-{uuid4().hex[:8].upper()}"
+        farm_id = farm_id or f"FARM-{uuid4().hex[:8].upper()}"
         row = {
             "id": farm_id,
             "organization_id": organization_id,
@@ -195,6 +196,10 @@ class PlatformService:
         }
         self.store.upsert_farm(row)
         return row
+
+    def delete_farm(self, farm_id: str, *, principal: AuthPrincipal | None = None) -> None:
+        self._require("manage_source_configs", principal=principal)
+        self.store.delete_farm(farm_id)
 
     def list_animals(self, limit: int = 200, *, farm_id: str | None = None) -> list[dict[str, Any]]:
         actor = self._require("view_animal_profile")

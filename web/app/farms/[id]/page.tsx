@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fetchFarmProfile, fetchFeedEnvironment } from "@/lib/api";
+import { fetchFarmProfile, fetchFarms, fetchFeedEnvironment } from "@/lib/api";
 import { Badge, EmptyState, KpiCard, Panel, Table } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,8 @@ const GRADE_TONE: Record<string, "green" | "yellow" | "red" | "neutral"> = {
 
 export default async function FarmDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [profile, feedEnv] = await Promise.all([fetchFarmProfile(id), fetchFeedEnvironment(id)]);
+  const [profile, feedEnv, farms] = await Promise.all([fetchFarmProfile(id), fetchFeedEnvironment(id), fetchFarms()]);
+  const registeredFarm = farms.find((f) => f.id === id);
 
   if (!profile) {
     return (
@@ -46,7 +47,7 @@ export default async function FarmDetailPage({ params }: { params: Promise<{ id:
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
-            {String(header.farm_name ?? id)}
+            {registeredFarm?.name ?? String(header.farm_name ?? id)}
           </h1>
           <Badge tone={GRADE_TONE[rating.grade] ?? "neutral"}>Grade {rating.grade}</Badge>
           <Badge tone={pressure.band === "low" ? "green" : pressure.band === "watch" ? "yellow" : "red"}>
