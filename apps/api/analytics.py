@@ -103,7 +103,13 @@ def build_overview(service: PlatformService, *, selected_farm: str | None = None
 
 def build_farm_profile(service: PlatformService, farm_id: str) -> dict[str, Any] | None:
     df = load_canonical_df(service)
-    outcome_bundle = _outcome_bundle(service, df)
+    # compute_state_timeseries's per-row scoring loop is the dominant cost at this data volume
+    # (O(all rows) via .iterrows()); restricting to just this farm before running it turns an
+    # all-farms computation into a single-farm one instead of throwing away 4/5 of the work.
+    farm_df = df[df["farm_id"].astype(str) == str(farm_id)].copy() if "farm_id" in df.columns else df
+    outcome_bundle = build_outcome_linkage_analysis(
+        farm_df, milk_df=pd.DataFrame(), repro_df=pd.DataFrame(), window=OUTCOME_WINDOW, min_obs=OUTCOME_MIN_OBS
+    )
     payload = build_farm_overview_payload(
         df,
         farm_id,
@@ -141,7 +147,10 @@ def build_feed_environment(service: PlatformService, *, selected_farm: str | Non
 
 def build_animal_profile(service: PlatformService, animal_id: str) -> dict[str, Any] | None:
     df = load_canonical_df(service)
-    outcome_bundle = _outcome_bundle(service, df)
+    animal_df = df[df["animal_id"].astype(str) == str(animal_id)].copy() if "animal_id" in df.columns else df
+    outcome_bundle = build_outcome_linkage_analysis(
+        animal_df, milk_df=pd.DataFrame(), repro_df=pd.DataFrame(), window=OUTCOME_WINDOW, min_obs=OUTCOME_MIN_OBS
+    )
     payload = build_cow_profile_payload(
         df,
         animal_id,
