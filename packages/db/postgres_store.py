@@ -432,6 +432,10 @@ class PostgresStore:
         with self.connect() as conn:
             conn.execute("DELETE FROM farms WHERE id=%s", (farm_id,))
 
+    def truncate_table(self, table: str) -> None:
+        with self.connect() as conn:
+            conn.execute(f"DELETE FROM {table}")
+
     def create_run(self, row: dict[str, Any]) -> None:
         self._insert("ingestion_runs", row)
 

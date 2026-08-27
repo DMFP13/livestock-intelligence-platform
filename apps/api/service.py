@@ -201,6 +201,14 @@ class PlatformService:
         self._require("manage_source_configs", principal=principal)
         self.store.delete_farm(farm_id)
 
+    TRUNCATABLE_TABLES = {"observations", "events", "alerts", "ingestion_runs"}
+
+    def truncate_table(self, table: str, *, principal: AuthPrincipal | None = None) -> None:
+        self._require("manage_connectors", principal=principal)
+        if table not in self.TRUNCATABLE_TABLES:
+            raise ValueError(f"table '{table}' is not truncatable via this endpoint")
+        self.store.truncate_table(table)
+
     def list_animals(self, limit: int = 200, *, farm_id: str | None = None) -> list[dict[str, Any]]:
         actor = self._require("view_animal_profile")
         org_scope, farm_scope = self.auth.resolve_actor_scope(actor)

@@ -114,6 +114,12 @@ def delete_farm(farm_id: str) -> dict[str, Any]:
     return {"deleted": farm_id}
 
 
+@app.post("/admin/truncate/{table}")
+def truncate_table(table: str) -> dict[str, Any]:
+    service.truncate_table(table)
+    return {"truncated": table}
+
+
 @app.get("/animals")
 def animals(limit: int = 200, farm_id: str | None = None) -> dict[str, Any]:
     return {"animals": service.list_animals(limit=limit, farm_id=farm_id)}
