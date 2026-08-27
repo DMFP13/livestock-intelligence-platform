@@ -26,6 +26,13 @@ def observation_rows_to_wideframe(observation_rows: list[dict[str, Any]]) -> pd.
         if key not in obs.columns:
             obs[key] = pd.NA
 
+    # pivot_table's underlying groupby drops any row with NaN in an index key (e.g. herd_id/
+    # device_id are frequently unset). Sentinel-fill the string keys so those rows survive the
+    # pivot, then restore NaN afterwards so downstream .fillna(...) calls behave as intended.
+    na_sentinel = "__NA__"
+    string_keys = [k for k in keys if k != "date"]
+    obs[string_keys] = obs[string_keys].fillna(na_sentinel)
+
     wide = (
         obs.pivot_table(index=keys, columns="metric", values="value_num", aggfunc="mean")
         .reset_index()
@@ -33,6 +40,8 @@ def observation_rows_to_wideframe(observation_rows: list[dict[str, Any]]) -> pd.
     )
     if wide.empty:
         return pd.DataFrame(columns=schema.CANONICAL_COLUMN_ORDER)
+
+    wide[string_keys] = wide[string_keys].replace(na_sentinel, pd.NA)
 
     wide["record_id"] = (
         wide["source_system"].fillna("store").astype("string")

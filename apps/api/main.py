@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from apps.api import analytics
 from apps.api.auth import ForbiddenError, UnauthorizedError
 from apps.api.service import PlatformService
 
@@ -89,14 +92,29 @@ def farms(limit: int = 200) -> dict[str, Any]:
     return {"farms": service.list_farms(limit=limit)}
 
 
+@app.post("/farms")
+async def create_farm(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    return service.create_farm(
+        name=str(payload.get("name")),
+        location=payload.get("location"),
+        region=payload.get("region"),
+        species=payload.get("species"),
+        sensor_system=payload.get("sensorSystem") or payload.get("system"),
+        contact=payload.get("contact"),
+        notes=payload.get("notes"),
+        organization_id=payload.get("organizationId") or "ORG-001",
+    )
+
+
 @app.get("/animals")
-def animals(limit: int = 200) -> dict[str, Any]:
-    return {"animals": service.list_animals(limit=limit)}
+def animals(limit: int = 200, farm_id: str | None = None) -> dict[str, Any]:
+    return {"animals": service.list_animals(limit=limit, farm_id=farm_id)}
 
 
 @app.get("/observations")
-def observations(limit: int = 200) -> dict[str, Any]:
-    return {"observations": service.list_observations(limit=limit)}
+def observations(limit: int = 200, farm_id: str | None = None) -> dict[str, Any]:
+    return {"observations": service.list_observations(limit=limit, farm_id=farm_id)}
 
 
 @app.get("/events")
@@ -105,8 +123,73 @@ def events(limit: int = 200) -> dict[str, Any]:
 
 
 @app.get("/alerts")
-def alerts(limit: int = 200) -> dict[str, Any]:
-    return {"alerts": service.list_alerts(limit=limit)}
+def alerts(limit: int = 200, farm_id: str | None = None) -> dict[str, Any]:
+    return {"alerts": service.list_alerts(limit=limit, farm_id=farm_id)}
+
+
+@app.get("/overview")
+def overview(farm_id: str | None = None) -> dict[str, Any]:
+    return analytics.build_overview(service, selected_farm=farm_id)
+
+
+@app.get("/farms/{farm_id}/profile")
+def farm_profile(farm_id: str) -> dict[str, Any]:
+    payload = analytics.build_farm_profile(service, farm_id)
+    if payload is None:
+        return JSONResponse(status_code=404, content={"error": "farm not found or has no data"})
+    return payload
+
+
+@app.get("/market-finance")
+def market_finance() -> dict[str, Any]:
+    return analytics.build_market_finance(service)
+
+
+@app.get("/feed-environment")
+def feed_environment(farm_id: str | None = None) -> dict[str, Any]:
+    return analytics.build_feed_environment(service, selected_farm=farm_id)
+
+
+@app.get("/animals/{animal_id}/profile")
+def animal_profile(animal_id: str) -> dict[str, Any]:
+    payload = analytics.build_animal_profile(service, animal_id)
+    if payload is None:
+        return JSONResponse(status_code=404, content={"error": "animal not found or has no data"})
+    return payload
+
+
+@app.get("/animals/{animal_id}/timeseries")
+def animal_timeseries(animal_id: str, metrics: str = "") -> dict[str, Any]:
+    metric_list = [m for m in metrics.split(",") if m]
+    return analytics.build_animal_timeseries(service, animal_id, metric_list)
+
+
+@app.get("/outcomes")
+def outcomes() -> dict[str, Any]:
+    return analytics.build_outcomes(service)
+
+
+@app.post("/ingestion/upload")
+async def ingestion_upload(
+    file: UploadFile = File(...),
+    farm_id: str = Form(...),
+    connector_key: str = Form("sensor_upload"),
+    source_system: str = Form("api_upload"),
+) -> dict[str, Any]:
+    uploads_dir = Path("data/uploads")
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(file.filename or "upload.csv").suffix or ".csv"
+    tmp_path = uploads_dir / f"{connector_key}_{uuid4().hex}{suffix}"
+    tmp_path.write_bytes(await file.read())
+    try:
+        return service.run_ingestion(
+            connector_key=connector_key,
+            source_system=source_system,
+            mode="uploaded_file",
+            config={"file_path": str(tmp_path), "farm_id": farm_id},
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 @app.get("/reference-series")

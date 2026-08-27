@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import json
+import os
 from typing import Any
 from uuid import uuid4
 
@@ -24,7 +25,13 @@ from packages.pipelines.live_sync import LiveSyncOrchestrator
 
 class PlatformService:
     def __init__(self, db_path: str = "data/platform.db"):
-        self.store = SQLiteStore(db_path)
+        database_url = os.environ.get("DATABASE_URL")
+        if database_url:
+            from packages.db.postgres_store import PostgresStore
+
+            self.store = PostgresStore(database_url)
+        else:
+            self.store = SQLiteStore(db_path)
         self.store.migrate()
         self.auth = AuthService(self.store)
         self._current_principal: AuthPrincipal | None = None
@@ -154,15 +161,53 @@ class PlatformService:
             return []
         return self.store.fetch_rows_scoped("farms", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
 
-    def list_animals(self, limit: int = 200) -> list[dict[str, Any]]:
+    def create_farm(
+        self,
+        *,
+        name: str,
+        location: str | None = None,
+        region: str | None = None,
+        species: str | None = None,
+        sensor_system: str | None = None,
+        contact: str | None = None,
+        notes: str | None = None,
+        organization_id: str = "ORG-001",
+        principal: AuthPrincipal | None = None,
+    ) -> dict[str, Any]:
+        self._require("manage_source_configs", principal=principal, organization_id=organization_id)
+        farm_id = f"FARM-{uuid4().hex[:8].upper()}"
+        row = {
+            "id": farm_id,
+            "organization_id": organization_id,
+            "name": name,
+            "location_text": location,
+            "metadata_json": json.dumps(
+                {
+                    "region": region,
+                    "species": species,
+                    "sensor_system": sensor_system,
+                    "contact": contact,
+                    "notes": notes,
+                },
+                default=str,
+            ),
+            "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        self.store.upsert_farm(row)
+        return row
+
+    def list_animals(self, limit: int = 200, *, farm_id: str | None = None) -> list[dict[str, Any]]:
         actor = self._require("view_animal_profile")
         org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
         farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
         if not self._is_global_actor(actor) and not org_scope and not farm_scope:
             return []
-        return self.store.fetch_rows_scoped("animals", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
+        rows = self.store.fetch_rows_scoped("animals", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
+        if farm_id:
+            rows = [r for r in rows if str(r.get("farm_id")) == str(farm_id)]
+        return rows
 
-    def list_observations(self, limit: int = 200) -> list[dict[str, Any]]:
+    def list_observations(self, limit: int = 200, *, farm_id: str | None = None) -> list[dict[str, Any]]:
         actor = self._require("view_farm_profile", allow_aggregate_only=True)
         org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
         farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
@@ -170,7 +215,9 @@ class PlatformService:
             return []
         rows = self.store.fetch_rows_scoped("observations", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
         if actor.has_role("government_analyst"):
-            return [r for r in rows if not r.get("animal_id")]
+            rows = [r for r in rows if not r.get("animal_id")]
+        if farm_id:
+            rows = [r for r in rows if str(r.get("farm_id")) == str(farm_id)]
         return rows
 
     def list_events(self, limit: int = 200) -> list[dict[str, Any]]:
@@ -181,7 +228,7 @@ class PlatformService:
             return []
         return self.store.fetch_rows_scoped("events", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
 
-    def list_alerts(self, limit: int = 200) -> list[dict[str, Any]]:
+    def list_alerts(self, limit: int = 200, *, farm_id: str | None = None) -> list[dict[str, Any]]:
         actor = self._require("view_farm_profile", allow_aggregate_only=True)
         org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
         farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
@@ -189,7 +236,9 @@ class PlatformService:
             return []
         rows = self.store.fetch_rows_scoped("alerts", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
         if actor.has_role("government_analyst"):
-            return [r for r in rows if not r.get("animal_id")]
+            rows = [r for r in rows if not r.get("animal_id")]
+        if farm_id:
+            rows = [r for r in rows if str(r.get("farm_id")) == str(farm_id)]
         return rows
 
     def list_reference_series(self, limit: int = 200) -> list[dict[str, Any]]:

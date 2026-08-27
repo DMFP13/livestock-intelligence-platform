@@ -3,3 +3,6 @@ openpyxl
 matplotlib
 fastapi
 uvicorn
+python-multipart
+psycopg[binary]
+psycopg-pool

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, Iterator
 
+import psycopg
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 MIGRATIONS: list[str] = [
     """
@@ -24,8 +25,7 @@ MIGRATIONS: list[str] = [
       name TEXT NOT NULL,
       location_text TEXT,
       metadata_json TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (organization_id) REFERENCES organizations(id)
+      created_at TEXT NOT NULL
     );
     """,
     """
@@ -35,8 +35,7 @@ MIGRATIONS: list[str] = [
       name TEXT,
       location_type TEXT,
       metadata_json TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (farm_id) REFERENCES farms(id)
+      created_at TEXT NOT NULL
     );
     """,
     """
@@ -45,8 +44,7 @@ MIGRATIONS: list[str] = [
       farm_id TEXT,
       name TEXT,
       metadata_json TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (farm_id) REFERENCES farms(id)
+      created_at TEXT NOT NULL
     );
     """,
     """
@@ -57,9 +55,7 @@ MIGRATIONS: list[str] = [
       tag_id TEXT,
       species TEXT,
       metadata_json TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (farm_id) REFERENCES farms(id),
-      FOREIGN KEY (herd_id) REFERENCES herds(id)
+      created_at TEXT NOT NULL
     );
     """,
     """
@@ -69,8 +65,7 @@ MIGRATIONS: list[str] = [
       device_type TEXT,
       vendor TEXT,
       metadata_json TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (farm_id) REFERENCES farms(id)
+      created_at TEXT NOT NULL
     );
     """,
     """
@@ -259,8 +254,7 @@ MIGRATIONS: list[str] = [
       total_runs INTEGER DEFAULT 0,
       retry_count INTEGER DEFAULT 0,
       next_poll_at TEXT,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (source_config_id) REFERENCES source_configs(id)
+      updated_at TEXT NOT NULL
     );
     """,
     """
@@ -274,8 +268,7 @@ MIGRATIONS: list[str] = [
       payload_json TEXT NOT NULL,
       validation_status TEXT NOT NULL DEFAULT 'pending',
       validation_error TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (ingestion_run_id) REFERENCES ingestion_runs(id)
+      created_at TEXT NOT NULL
     );
     """,
     """
@@ -283,7 +276,7 @@ MIGRATIONS: list[str] = [
     ON raw_source_records (ingestion_run_id, record_index);
     """,
     """
-    CREATE VIEW IF NOT EXISTS source_runs AS
+    CREATE OR REPLACE VIEW source_runs AS
     SELECT * FROM ingestion_runs;
     """,
     """
@@ -332,8 +325,7 @@ MIGRATIONS: list[str] = [
       user_id TEXT NOT NULL,
       role_key TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      UNIQUE(user_id, role_key),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      UNIQUE(user_id, role_key)
     );
     """,
     """
@@ -342,9 +334,7 @@ MIGRATIONS: list[str] = [
       user_id TEXT NOT NULL,
       organization_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      UNIQUE(user_id, organization_id),
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (organization_id) REFERENCES organizations(id)
+      UNIQUE(user_id, organization_id)
     );
     """,
     """
@@ -353,9 +343,7 @@ MIGRATIONS: list[str] = [
       user_id TEXT NOT NULL,
       farm_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      UNIQUE(user_id, farm_id),
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (farm_id) REFERENCES farms(id)
+      UNIQUE(user_id, farm_id)
     );
     """,
     """
@@ -373,34 +361,41 @@ MIGRATIONS: list[str] = [
 ]
 
 
-class SQLiteStore:
-    def __init__(self, db_path: str | Path = "data/platform.db"):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+class PostgresStore:
+    """Same method surface as SQLiteStore, backed by Postgres via psycopg3."""
+
+    def __init__(self, database_url: str):
+        self.database_url = database_url
+        self._pool = ConnectionPool(conninfo=database_url, open=True, min_size=1, max_size=5)
 
     @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
-        try:
+    def connect(self) -> Iterator[psycopg.Connection]:
+        with self._pool.connection() as conn:
+            conn.row_factory = dict_row
             yield conn
-            conn.commit()
-        finally:
-            conn.close()
 
     def migrate(self) -> None:
         with self.connect() as conn:
             for statement in MIGRATIONS:
-                conn.executescript(statement)
+                conn.execute(statement)
             self._ensure_column(conn, "source_configs", "auth_json", "TEXT")
         self._seed_default_auth_model()
 
     def _insert(self, table: str, row: dict[str, Any]) -> None:
         keys = list(row.keys())
-        placeholders = ",".join(["?"] * len(keys))
+        placeholders = ",".join(["%s"] * len(keys))
         columns = ",".join(keys)
         values = [row[k] for k in keys]
-        sql = f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholders})"
+        update_cols = [k for k in keys if k != "id"]
+        if update_cols:
+            update_clause = ",".join(f"{k}=EXCLUDED.{k}" for k in update_cols)
+            conflict_clause = f"DO UPDATE SET {update_clause}"
+        else:
+            conflict_clause = "DO NOTHING"
+        sql = (
+            f"INSERT INTO {table} ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT (id) {conflict_clause}"
+        )
         with self.connect() as conn:
             conn.execute(sql, values)
 
@@ -439,23 +434,30 @@ class SQLiteStore:
     def update_run_status(self, run_id: str, patch: dict[str, Any]) -> None:
         if not patch:
             return
-        fields = [f"{k}=?" for k in patch.keys()]
+        fields = [f"{k}=%s" for k in patch.keys()]
         values = list(patch.values()) + [run_id]
-        sql = f"UPDATE ingestion_runs SET {', '.join(fields)} WHERE id=?"
+        sql = f"UPDATE ingestion_runs SET {', '.join(fields)} WHERE id=%s"
         with self.connect() as conn:
             conn.execute(sql, values)
 
+    def _order_column(self, conn: psycopg.Connection, table: str) -> str:
+        cols = conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name=%s",
+            (table,),
+        ).fetchall()
+        names = {str(c["column_name"]) for c in cols}
+        if "created_at" in names:
+            return "created_at"
+        if "started_at" in names:
+            return "started_at"
+        return "id"
+
     def fetch_rows(self, table: str, limit: int = 200) -> list[dict[str, Any]]:
         with self.connect() as conn:
-            cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
-            col_names = {c["name"] for c in cols}
-            if "created_at" in col_names:
-                order_col = "created_at"
-            elif "started_at" in col_names:
-                order_col = "started_at"
-            else:
-                order_col = "id"
-            rows = conn.execute(f"SELECT * FROM {table} ORDER BY {order_col} DESC LIMIT ?", (limit,)).fetchall()
+            order_col = self._order_column(conn, table)
+            rows = conn.execute(
+                f"SELECT * FROM {table} ORDER BY {order_col} DESC LIMIT %s", (limit,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def fetch_rows_scoped(
@@ -495,7 +497,7 @@ class SQLiteStore:
 
     def fetch_run(self, run_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
-            row = conn.execute("SELECT * FROM ingestion_runs WHERE id=?", (run_id,)).fetchone()
+            row = conn.execute("SELECT * FROM ingestion_runs WHERE id=%s", (run_id,)).fetchone()
         return dict(row) if row else None
 
     def fetch_entity_alias(
@@ -509,7 +511,7 @@ class SQLiteStore:
             row = conn.execute(
                 """
                 SELECT * FROM entity_aliases
-                WHERE canonical_entity_type=? AND source_system=? AND lower(alias_value)=lower(?)
+                WHERE canonical_entity_type=%s AND source_system=%s AND lower(alias_value)=lower(%s)
                 LIMIT 1
                 """,
                 (canonical_entity_type, source_system, alias_value),
@@ -526,9 +528,9 @@ class SQLiteStore:
             rows = conn.execute(
                 """
                 SELECT * FROM entity_aliases
-                WHERE canonical_entity_type=?
+                WHERE canonical_entity_type=%s
                 ORDER BY created_at DESC
-                LIMIT ?
+                LIMIT %s
                 """,
                 (canonical_entity_type, limit),
             ).fetchall()
@@ -561,14 +563,14 @@ class SQLiteStore:
         sql = "SELECT * FROM source_configs WHERE 1=1"
         params: list[Any] = []
         if connector_key:
-            sql += " AND connector_key=?"
+            sql += " AND connector_key=%s"
             params.append(connector_key)
         if mode:
-            sql += " AND mode=?"
+            sql += " AND mode=%s"
             params.append(mode)
         if active_only:
             sql += " AND is_active=1"
-        sql += " ORDER BY updated_at DESC LIMIT ?"
+        sql += " ORDER BY updated_at DESC LIMIT %s"
         params.append(limit)
         with self.connect() as conn:
             rows = conn.execute(sql, tuple(params)).fetchall()
@@ -576,7 +578,9 @@ class SQLiteStore:
 
     def fetch_source_config(self, source_config_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
-            row = conn.execute("SELECT * FROM source_configs WHERE id=?", (source_config_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM source_configs WHERE id=%s", (source_config_id,)
+            ).fetchone()
         return dict(row) if row else None
 
     def upsert_source_sync_status(self, row: dict[str, Any]) -> None:
@@ -585,7 +589,7 @@ class SQLiteStore:
     def fetch_source_sync_status(self, source_config_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
             row = conn.execute(
-                "SELECT * FROM source_sync_status WHERE source_config_id=? ORDER BY updated_at DESC LIMIT 1",
+                "SELECT * FROM source_sync_status WHERE source_config_id=%s ORDER BY updated_at DESC LIMIT 1",
                 (source_config_id,),
             ).fetchone()
         return dict(row) if row else None
@@ -687,11 +691,7 @@ class SQLiteStore:
             )
             row["health_class"] = self._classify_source_health(row)
         active = [r for r in items if int(r.get("is_active") or 0) == 1]
-        failing = [
-            r
-            for r in active
-            if str(r.get("health_class") or "") == "failing"
-        ]
+        failing = [r for r in active if str(r.get("health_class") or "") == "failing"]
         latest_sync = None
         for r in items:
             ts = r.get("last_sync_at") or r.get("latest_run_at")
@@ -732,28 +732,34 @@ class SQLiteStore:
 
     def fetch_user_by_id(self, user_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
-            row = conn.execute("SELECT * FROM users WHERE id=? LIMIT 1", (user_id,)).fetchone()
+            row = conn.execute("SELECT * FROM users WHERE id=%s LIMIT 1", (user_id,)).fetchone()
         return dict(row) if row else None
 
     def fetch_user_by_external_subject(self, subject: str) -> dict[str, Any] | None:
         with self.connect() as conn:
-            row = conn.execute("SELECT * FROM users WHERE external_subject=? LIMIT 1", (subject,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM users WHERE external_subject=%s LIMIT 1", (subject,)
+            ).fetchone()
         return dict(row) if row else None
 
     def fetch_user_by_email(self, email: str) -> dict[str, Any] | None:
         with self.connect() as conn:
-            row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?) LIMIT 1", (email,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM users WHERE lower(email)=lower(%s) LIMIT 1", (email,)
+            ).fetchone()
         return dict(row) if row else None
 
     def list_user_roles(self, user_id: str) -> list[str]:
         with self.connect() as conn:
-            rows = conn.execute("SELECT role_key FROM user_roles WHERE user_id=?", (user_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT role_key FROM user_roles WHERE user_id=%s", (user_id,)
+            ).fetchall()
         return [str(r["role_key"]) for r in rows]
 
     def list_role_permissions(self, role_keys: list[str]) -> set[str]:
         if not role_keys:
             return set()
-        placeholders = ",".join(["?"] * len(role_keys))
+        placeholders = ",".join(["%s"] * len(role_keys))
         with self.connect() as conn:
             rows = conn.execute(
                 f"SELECT permission_key FROM role_permissions WHERE role_key IN ({placeholders})",
@@ -764,14 +770,16 @@ class SQLiteStore:
     def list_user_organization_ids(self, user_id: str) -> set[str]:
         with self.connect() as conn:
             rows = conn.execute(
-                "SELECT organization_id FROM user_organizations WHERE user_id=?",
+                "SELECT organization_id FROM user_organizations WHERE user_id=%s",
                 (user_id,),
             ).fetchall()
         return {str(r["organization_id"]) for r in rows}
 
     def list_user_farm_ids(self, user_id: str) -> set[str]:
         with self.connect() as conn:
-            rows = conn.execute("SELECT farm_id FROM user_farms WHERE user_id=?", (user_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT farm_id FROM user_farms WHERE user_id=%s", (user_id,)
+            ).fetchall()
         return {str(r["farm_id"]) for r in rows}
 
     def insert_raw_source_records(
@@ -789,10 +797,19 @@ class SQLiteStore:
             for idx, payload in enumerate(rows):
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO raw_source_records (
+                    INSERT INTO raw_source_records (
                       id, ingestion_run_id, connector_name, source_system, mode,
                       record_index, payload_json, validation_status, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending', %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                      ingestion_run_id=EXCLUDED.ingestion_run_id,
+                      connector_name=EXCLUDED.connector_name,
+                      source_system=EXCLUDED.source_system,
+                      mode=EXCLUDED.mode,
+                      record_index=EXCLUDED.record_index,
+                      payload_json=EXCLUDED.payload_json,
+                      validation_status=EXCLUDED.validation_status,
+                      created_at=EXCLUDED.created_at
                     """,
                     (
                         f"{ingestion_run_id}:{idx}",
@@ -813,9 +830,9 @@ class SQLiteStore:
             rows = conn.execute(
                 """
                 SELECT * FROM raw_source_records
-                WHERE ingestion_run_id=?
+                WHERE ingestion_run_id=%s
                 ORDER BY record_index ASC
-                LIMIT ?
+                LIMIT %s
                 """,
                 (ingestion_run_id, limit),
             ).fetchall()
@@ -833,7 +850,7 @@ class SQLiteStore:
                 """
                 UPDATE raw_source_records
                 SET validation_status='valid', validation_error=NULL
-                WHERE ingestion_run_id=?
+                WHERE ingestion_run_id=%s
                 """,
                 (ingestion_run_id,),
             )
@@ -841,19 +858,15 @@ class SQLiteStore:
                 conn.execute(
                     """
                     UPDATE raw_source_records
-                    SET validation_status='invalid', validation_error=?
-                    WHERE ingestion_run_id=? AND record_index=?
+                    SET validation_status='invalid', validation_error=%s
+                    WHERE ingestion_run_id=%s AND record_index=%s
                     """,
                     (str(err), ingestion_run_id, int(idx)),
                 )
 
     @staticmethod
-    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl_type: str) -> None:
-        cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
-        names = {str(c["name"]) for c in cols}
-        if column in names:
-            return
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}")
+    def _ensure_column(conn: psycopg.Connection, table: str, column: str, ddl_type: str) -> None:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl_type}")
 
     @staticmethod
     def _classify_source_health(row: dict[str, Any]) -> str:
@@ -989,16 +1002,18 @@ class SQLiteStore:
             for role_key in role_keys:
                 conn.execute(
                     """
-                    INSERT OR IGNORE INTO roles (id, role_key, name, description, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO roles (id, role_key, name, description, created_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING
                     """,
                     (f"ROLE:{role_key}", role_key, role_key.replace("_", " ").title(), "", now),
                 )
             for perm in permissions:
                 conn.execute(
                     """
-                    INSERT OR IGNORE INTO permissions (id, permission_key, description, created_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO permissions (id, permission_key, description, created_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING
                     """,
                     (f"PERM:{perm}", perm, "", now),
                 )
@@ -1006,92 +1021,105 @@ class SQLiteStore:
                 for perm in perms:
                     conn.execute(
                         """
-                        INSERT OR IGNORE INTO role_permissions (id, role_key, permission_key, created_at)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO role_permissions (id, role_key, permission_key, created_at)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (id) DO NOTHING
                         """,
                         (f"RP:{role_key}:{perm}", role_key, perm, now),
                     )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
-                VALUES ('DEV-ADMIN', 'dev-admin', 'dev-admin@local', 'Dev Admin', 1, '{}', ?, ?)
+                INSERT INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-ADMIN', 'dev-admin', 'dev-admin@local', 'Dev Admin', 1, '{}', %s, %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now, now),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
-                VALUES ('DEV-MANAGER', 'dev-manager', 'dev-manager@local', 'Dev Manager', 1, '{}', ?, ?)
+                INSERT INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-MANAGER', 'dev-manager', 'dev-manager@local', 'Dev Manager', 1, '{}', %s, %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now, now),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
-                VALUES ('DEV-OWNER', 'dev-owner', 'dev-owner@local', 'Dev Farm Owner', 1, '{}', ?, ?)
+                INSERT INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-OWNER', 'dev-owner', 'dev-owner@local', 'Dev Farm Owner', 1, '{}', %s, %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now, now),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
-                VALUES ('DEV-POLICY', 'dev-policy', 'dev-policy@local', 'Dev Policy Maker', 1, '{}', ?, ?)
+                INSERT INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-POLICY', 'dev-policy', 'dev-policy@local', 'Dev Policy Maker', 1, '{}', %s, %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now, now),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
-                VALUES ('UR:DEV-ADMIN:platform_admin', 'DEV-ADMIN', 'platform_admin', ?)
+                INSERT INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-ADMIN:platform_admin', 'DEV-ADMIN', 'platform_admin', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
-                VALUES ('UR:DEV-MANAGER:dairy_manager', 'DEV-MANAGER', 'dairy_manager', ?)
+                INSERT INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-MANAGER:dairy_manager', 'DEV-MANAGER', 'dairy_manager', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
-                VALUES ('UR:DEV-OWNER:farm_owner', 'DEV-OWNER', 'farm_owner', ?)
+                INSERT INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-OWNER:farm_owner', 'DEV-OWNER', 'farm_owner', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
-                VALUES ('UR:DEV-POLICY:policy_maker', 'DEV-POLICY', 'policy_maker', ?)
+                INSERT INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-POLICY:policy_maker', 'DEV-POLICY', 'policy_maker', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_organizations (id, user_id, organization_id, created_at)
-                VALUES ('UO:DEV-ADMIN:ORG-001', 'DEV-ADMIN', 'ORG-001', ?)
+                INSERT INTO user_organizations (id, user_id, organization_id, created_at)
+                VALUES ('UO:DEV-ADMIN:ORG-001', 'DEV-ADMIN', 'ORG-001', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_organizations (id, user_id, organization_id, created_at)
-                VALUES ('UO:DEV-MANAGER:ORG-001', 'DEV-MANAGER', 'ORG-001', ?)
+                INSERT INTO user_organizations (id, user_id, organization_id, created_at)
+                VALUES ('UO:DEV-MANAGER:ORG-001', 'DEV-MANAGER', 'ORG-001', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_farms (id, user_id, farm_id, created_at)
-                VALUES ('UF:DEV-MANAGER:FARM-001', 'DEV-MANAGER', 'FARM-001', ?)
+                INSERT INTO user_farms (id, user_id, farm_id, created_at)
+                VALUES ('UF:DEV-MANAGER:FARM-001', 'DEV-MANAGER', 'FARM-001', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_farms (id, user_id, farm_id, created_at)
-                VALUES ('UF:DEV-OWNER:FARM-001', 'DEV-OWNER', 'FARM-001', ?)
+                INSERT INTO user_farms (id, user_id, farm_id, created_at)
+                VALUES ('UF:DEV-OWNER:FARM-001', 'DEV-OWNER', 'FARM-001', %s)
+                ON CONFLICT (id) DO NOTHING
                 """,
                 (now,),
             )
