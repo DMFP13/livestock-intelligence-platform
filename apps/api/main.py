@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from apps.api import analytics
 from apps.api.auth import ForbiddenError, UnauthorizedError
@@ -195,7 +196,8 @@ async def ingestion_upload(
     tmp_path = uploads_dir / f"{connector_key}_{uuid4().hex}{suffix}"
     tmp_path.write_bytes(await file.read())
     try:
-        return service.run_ingestion(
+        return await run_in_threadpool(
+            service.run_ingestion,
             connector_key=connector_key,
             source_system=source_system,
             mode="uploaded_file",
@@ -275,7 +277,8 @@ async def live_sync_poll_cycle(request: Request) -> dict[str, Any]:
 @app.post("/ingestion/run")
 async def ingestion_run(request: Request) -> dict[str, Any]:
     payload = await request.json()
-    return service.run_ingestion(
+    return await run_in_threadpool(
+        service.run_ingestion,
         connector_key=str(payload.get("connectorKey")),
         source_system=str(payload.get("sourceSystem")),
         mode=str(payload.get("mode", "uploaded_file")),
