@@ -70,6 +70,7 @@ class TestLiveDataFoundation(unittest.TestCase):
         csv_body = (
             "ID,Cow ID,Date,Ruminating(min),Activity Rate,Data Collection Rate(%),Mounting(count)\n"
             "1,Cow_17,2025-01-01,320,2.1,98,1\n"
+            "2,Cow_18,,310,2.0,97,0\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "live_foundation.db"
@@ -85,10 +86,18 @@ class TestLiveDataFoundation(unittest.TestCase):
             )
             self.assertEqual(result.get("status"), "completed")
             self.assertEqual(result.get("mode"), "manual_upload")
+            self.assertEqual(int(result.get("rows_raw") or 0), 2)
+            self.assertEqual(int(result.get("rows_valid") or 0), 1)
+            self.assertEqual(int(result.get("validation_errors") or 0), 1)
 
             raw_rows = service.store.fetch_raw_source_records(str(result["id"]))
-            self.assertEqual(len(raw_rows), 1)
+            self.assertEqual(len(raw_rows), 2)
             self.assertEqual(raw_rows[0]["mode"], "manual_upload")
+            states = [str(r.get("validation_status")) for r in raw_rows]
+            self.assertIn("valid", states)
+            self.assertIn("invalid", states)
+            invalid_row = [r for r in raw_rows if str(r.get("validation_status")) == "invalid"][0]
+            self.assertIn("missing required fields", str(invalid_row.get("validation_error") or ""))
 
     def test_inactive_connector_remains_safe(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

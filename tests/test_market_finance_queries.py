@@ -61,6 +61,10 @@ class TestMarketFinanceQueries(unittest.TestCase):
         )
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["origin"], "processed_file_fallback")
+        self.assertIn("features", payload)
+        self.assertIn("market_signals", payload["features"])
+        self.assertIn("profitability_metrics", payload)
+        self.assertIn("profitability_outlook", payload)
 
     def test_build_payload_prefers_canonical_store_series(self) -> None:
         processed_df = pd.DataFrame([{"date": pd.Timestamp("2026-03-01"), "dairy_price": 50.0}])
@@ -72,6 +76,9 @@ class TestMarketFinanceQueries(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["origin"], "canonical_store")
         self.assertFalse(payload["reference_df"].empty)
+        self.assertIn("features", payload)
+        self.assertIn("market_signals", payload["features"])
+        self.assertIn("milk_vs_feed_chart", payload)
 
 
 if __name__ == "__main__":

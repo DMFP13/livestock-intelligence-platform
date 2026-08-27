@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -87,7 +87,7 @@ class SensorUploadConnector:
             if ts is None:
                 suspect_timestamps += 1
                 quality = QualityFlag.suspect.value
-                ts = datetime.utcnow()
+                ts = datetime.now(UTC)
             else:
                 quality = QualityFlag.good.value
 
@@ -115,7 +115,7 @@ class SensorUploadConnector:
                         "source_system": context.source_system,
                         "source_record_id": normalized.get("sourceRecordId"),
                         "metadata_json": "{}",
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                     }
                 )
 
@@ -135,7 +135,7 @@ class SensorUploadConnector:
                         "source_system": context.source_system,
                         "source_record_id": normalized.get("sourceRecordId"),
                         "metadata_json": "{}",
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                     }
                 )
 

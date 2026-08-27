@@ -44,6 +44,8 @@ class TestFeedEnvironmentQueries(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertFalse(payload["timeseries"].empty)
         self.assertIn("thi", payload["timeseries"].columns)
+        self.assertIn("features", payload)
+        self.assertIn("heat_stress", payload["features"])
 
     def test_uses_live_weather_when_processed_empty(self) -> None:
         payload = build_feed_environment_payload(pd.DataFrame(), service=_FakeService(), connector_keys=[])
@@ -51,6 +53,8 @@ class TestFeedEnvironmentQueries(unittest.TestCase):
         self.assertFalse(payload["timeseries"].empty)
         self.assertIn("temperature_c", payload["timeseries"].columns)
         self.assertIn("thi", payload["timeseries"].columns)
+        self.assertIn("features", payload)
+        self.assertIn("herd_metrics", payload["features"])
 
 
 if __name__ == "__main__":

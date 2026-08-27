@@ -73,10 +73,19 @@ def run_date_integrity_checks(df: pd.DataFrame) -> dict[str, Any]:
             "max_date": None,
         }
 
-    invalid_date_count = int(df["date"].isna().sum())
-    valid_dates = df["date"].dropna()
+    date_series = pd.to_datetime(df["date"], errors="coerce")
+    invalid_date_count = int(date_series.isna().sum())
+    valid_dates = date_series.dropna()
 
-    future_date_count = int((valid_dates > pd.Timestamp.utcnow().tz_localize(None)).sum()) if not valid_dates.empty else 0
+    if valid_dates.empty:
+        future_date_count = 0
+    else:
+        # Normalize comparison timezone to avoid aware/naive mismatch.
+        if getattr(valid_dates.dt, "tz", None) is not None:
+            now_ref = pd.Timestamp.now(tz="UTC")
+        else:
+            now_ref = pd.Timestamp.now()
+        future_date_count = int((valid_dates > now_ref).sum())
 
     return {
         "date_column_present": True,

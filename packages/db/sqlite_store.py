@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -166,6 +166,29 @@ MIGRATIONS: list[str] = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS recommendations (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT,
+      farm_id TEXT,
+      herd_id TEXT,
+      animal_id TEXT,
+      recommendation_type TEXT NOT NULL,
+      title TEXT,
+      details TEXT,
+      priority TEXT,
+      status TEXT NOT NULL,
+      recommended_at TEXT NOT NULL,
+      effective_from TEXT,
+      effective_to TEXT,
+      quality_flag TEXT NOT NULL,
+      source_system TEXT NOT NULL,
+      source_record_id TEXT,
+      metadata_json TEXT,
+      ingestion_run_id TEXT,
+      created_at TEXT NOT NULL
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS entity_aliases (
       id TEXT PRIMARY KEY,
       canonical_entity_type TEXT NOT NULL,
@@ -259,6 +282,94 @@ MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS idx_raw_source_records_run
     ON raw_source_records (ingestion_run_id, record_index);
     """,
+    """
+    CREATE VIEW IF NOT EXISTS source_runs AS
+    SELECT * FROM ingestion_runs;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      external_subject TEXT,
+      email TEXT,
+      display_name TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      metadata_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(external_subject),
+      UNIQUE(email)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY,
+      role_key TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS permissions (
+      id TEXT PRIMARY KEY,
+      permission_key TEXT NOT NULL UNIQUE,
+      description TEXT,
+      created_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      id TEXT PRIMARY KEY,
+      role_key TEXT NOT NULL,
+      permission_key TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(role_key, permission_key)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_roles (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      role_key TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(user_id, role_key),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_organizations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      organization_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(user_id, organization_id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (organization_id) REFERENCES organizations(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_farms (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      farm_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(user_id, farm_id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (farm_id) REFERENCES farms(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      occurred_at TEXT NOT NULL,
+      actor_user_id TEXT,
+      action TEXT NOT NULL,
+      resource_type TEXT,
+      resource_id TEXT,
+      outcome TEXT NOT NULL,
+      metadata_json TEXT
+    );
+    """,
 ]
 
 
@@ -282,6 +393,7 @@ class SQLiteStore:
             for statement in MIGRATIONS:
                 conn.executescript(statement)
             self._ensure_column(conn, "source_configs", "auth_json", "TEXT")
+        self._seed_default_auth_model()
 
     def _insert(self, table: str, row: dict[str, Any]) -> None:
         keys = list(row.keys())
@@ -298,7 +410,7 @@ class SQLiteStore:
 
     @staticmethod
     def _now() -> str:
-        return datetime.utcnow().isoformat(timespec="seconds")
+        return datetime.now(UTC).isoformat(timespec="seconds")
 
     def upsert_observation(self, row: dict[str, Any]) -> None:
         self._insert("observations", row)
@@ -308,6 +420,9 @@ class SQLiteStore:
 
     def upsert_alert(self, row: dict[str, Any]) -> None:
         self._insert("alerts", row)
+
+    def upsert_recommendation(self, row: dict[str, Any]) -> None:
+        self._insert("recommendations", row)
 
     def upsert_reference_series(self, row: dict[str, Any]) -> None:
         self._insert("reference_series", row)
@@ -339,6 +454,41 @@ class SQLiteStore:
                 order_col = "id"
             rows = conn.execute(f"SELECT * FROM {table} ORDER BY {order_col} DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
+
+    def fetch_rows_scoped(
+        self,
+        table: str,
+        *,
+        limit: int = 200,
+        organization_ids: set[str] | None = None,
+        farm_ids: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        rows = self.fetch_rows(table, limit=max(limit * 5, limit))
+        if not rows:
+            return []
+        org_ids = {str(v) for v in (organization_ids or set())}
+        f_ids = {str(v) for v in (farm_ids or set())}
+        if not org_ids and not f_ids:
+            return rows[:limit]
+
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            org_ok = True
+            farm_ok = True
+            if org_ids and "organization_id" in row:
+                org_val = row.get("organization_id")
+                org_ok = bool(org_val) and str(org_val) in org_ids
+            if f_ids:
+                if "farm_id" in row:
+                    farm_val = row.get("farm_id")
+                    farm_ok = bool(farm_val) and str(farm_val) in f_ids
+                elif table == "farms" and "id" in row:
+                    farm_ok = str(row.get("id")) in f_ids
+            if org_ok and farm_ok:
+                out.append(row)
+            if len(out) >= limit:
+                break
+        return out
 
     def fetch_run(self, run_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
@@ -437,7 +587,7 @@ class SQLiteStore:
             ).fetchone()
         return dict(row) if row else None
 
-    def fetch_source_health_summary(self) -> dict[str, Any]:
+    def fetch_source_health_summary(self, *, rolling_window_days: int = 7) -> dict[str, Any]:
         with self.connect() as conn:
             rows = conn.execute(
                 """
@@ -459,21 +609,85 @@ class SQLiteStore:
                 GROUP BY connector_name, source_system, mode
                 """
             ).fetchall()
+            run_rows_all = conn.execute(
+                """
+                SELECT connector_name, source_system, mode, status, started_at, ended_at,
+                       rows_raw, rows_valid, validation_errors
+                FROM ingestion_runs
+                ORDER BY started_at DESC
+                """
+            ).fetchall()
         items = [dict(r) for r in rows]
         run_index = {
             (str(r["connector_name"]), str(r["source_system"]), str(r["mode"])): dict(r)
             for r in run_rows
         }
+        latest_index: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for run in run_rows_all:
+            key = (str(run["connector_name"]), str(run["source_system"]), str(run["mode"]))
+            if key not in latest_index:
+                latest_index[key] = dict(run)
+
+        cutoff = datetime.now(UTC) - timedelta(days=max(int(rolling_window_days), 1))
+
+        def _as_dt(v: Any) -> datetime | None:
+            if not v:
+                return None
+            try:
+                dt = datetime.fromisoformat(str(v))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                return dt
+            except ValueError:
+                return None
+
+        rolling_index: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for run in run_rows_all:
+            started_dt = _as_dt(run["started_at"])
+            if started_dt is None or started_dt < cutoff:
+                continue
+            key = (str(run["connector_name"]), str(run["source_system"]), str(run["mode"]))
+            slot = rolling_index.setdefault(
+                key,
+                {
+                    "recent_runs": 0,
+                    "recent_failed_runs": 0,
+                    "recent_rows_raw": 0,
+                    "recent_rows_valid": 0,
+                    "recent_validation_errors": 0,
+                },
+            )
+            slot["recent_runs"] += 1
+            if str(run["status"]) == "failed":
+                slot["recent_failed_runs"] += 1
+            slot["recent_rows_raw"] += int(run["rows_raw"] or 0)
+            slot["recent_rows_valid"] += int(run["rows_valid"] or 0)
+            slot["recent_validation_errors"] += int(run["validation_errors"] or 0)
+
         for row in items:
-            stats = run_index.get((str(row["connector_key"]), str(row["source_system"]), str(row["mode"]))) or {}
+            key = (str(row["connector_key"]), str(row["source_system"]), str(row["mode"]))
+            stats = run_index.get(key) or {}
+            latest = latest_index.get(key) or {}
+            recent = rolling_index.get(key) or {}
             row["total_runs"] = int(stats.get("total_runs") or 0)
             row["failed_runs"] = int(stats.get("failed_runs") or 0)
             row["latest_run_at"] = stats.get("latest_run_at")
+            row["latest_run_status"] = latest.get("status")
+            row["recent_runs"] = int(recent.get("recent_runs") or 0)
+            row["recent_failed_runs"] = int(recent.get("recent_failed_runs") or 0)
+            row["recent_rows_raw"] = int(recent.get("recent_rows_raw") or 0)
+            row["recent_rows_valid"] = int(recent.get("recent_rows_valid") or 0)
+            row["recent_validation_errors"] = int(recent.get("recent_validation_errors") or 0)
+            row["recent_failure_rate"] = round(
+                (row["recent_failed_runs"] / row["recent_runs"]) if row["recent_runs"] > 0 else 0.0,
+                4,
+            )
+            row["health_class"] = self._classify_source_health(row)
         active = [r for r in items if int(r.get("is_active") or 0) == 1]
         failing = [
             r
             for r in active
-            if str(r.get("status") or "") in {"failed", "error"} or int(r.get("failed_runs") or 0) > 0
+            if str(r.get("health_class") or "") == "failing"
         ]
         latest_sync = None
         for r in items:
@@ -484,9 +698,78 @@ class SQLiteStore:
             "total_sources": len(items),
             "active_sources": len(active),
             "failing_sources": len(failing),
+            "rolling_window_days": int(rolling_window_days),
             "latest_sync_at": latest_sync,
             "sources": items,
         }
+
+    def upsert_user(self, row: dict[str, Any]) -> None:
+        self._insert("users", row)
+
+    def upsert_role(self, row: dict[str, Any]) -> None:
+        self._insert("roles", row)
+
+    def upsert_permission(self, row: dict[str, Any]) -> None:
+        self._insert("permissions", row)
+
+    def upsert_role_permission(self, row: dict[str, Any]) -> None:
+        self._insert("role_permissions", row)
+
+    def upsert_user_role(self, row: dict[str, Any]) -> None:
+        self._insert("user_roles", row)
+
+    def upsert_user_organization(self, row: dict[str, Any]) -> None:
+        self._insert("user_organizations", row)
+
+    def upsert_user_farm(self, row: dict[str, Any]) -> None:
+        self._insert("user_farms", row)
+
+    def insert_audit_log(self, row: dict[str, Any]) -> None:
+        self._insert("audit_log", row)
+
+    def fetch_user_by_id(self, user_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id=? LIMIT 1", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+    def fetch_user_by_external_subject(self, subject: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM users WHERE external_subject=? LIMIT 1", (subject,)).fetchone()
+        return dict(row) if row else None
+
+    def fetch_user_by_email(self, email: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?) LIMIT 1", (email,)).fetchone()
+        return dict(row) if row else None
+
+    def list_user_roles(self, user_id: str) -> list[str]:
+        with self.connect() as conn:
+            rows = conn.execute("SELECT role_key FROM user_roles WHERE user_id=?", (user_id,)).fetchall()
+        return [str(r["role_key"]) for r in rows]
+
+    def list_role_permissions(self, role_keys: list[str]) -> set[str]:
+        if not role_keys:
+            return set()
+        placeholders = ",".join(["?"] * len(role_keys))
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"SELECT permission_key FROM role_permissions WHERE role_key IN ({placeholders})",
+                tuple(role_keys),
+            ).fetchall()
+        return {str(r["permission_key"]) for r in rows}
+
+    def list_user_organization_ids(self, user_id: str) -> set[str]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT organization_id FROM user_organizations WHERE user_id=?",
+                (user_id,),
+            ).fetchall()
+        return {str(r["organization_id"]) for r in rows}
+
+    def list_user_farm_ids(self, user_id: str) -> set[str]:
+        with self.connect() as conn:
+            rows = conn.execute("SELECT farm_id FROM user_farms WHERE user_id=?", (user_id,)).fetchall()
+        return {str(r["farm_id"]) for r in rows}
 
     def insert_raw_source_records(
         self,
@@ -535,6 +818,32 @@ class SQLiteStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def update_raw_source_validation(
+        self,
+        *,
+        ingestion_run_id: str,
+        invalid_by_index: dict[int, str] | None = None,
+    ) -> None:
+        invalid_by_index = invalid_by_index or {}
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE raw_source_records
+                SET validation_status='valid', validation_error=NULL
+                WHERE ingestion_run_id=?
+                """,
+                (ingestion_run_id,),
+            )
+            for idx, err in invalid_by_index.items():
+                conn.execute(
+                    """
+                    UPDATE raw_source_records
+                    SET validation_status='invalid', validation_error=?
+                    WHERE ingestion_run_id=? AND record_index=?
+                    """,
+                    (str(err), ingestion_run_id, int(idx)),
+                )
+
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl_type: str) -> None:
         cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
@@ -542,3 +851,244 @@ class SQLiteStore:
         if column in names:
             return
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}")
+
+    @staticmethod
+    def _classify_source_health(row: dict[str, Any]) -> str:
+        if int(row.get("is_active") or 0) != 1:
+            return "inactive"
+        recent_runs = int(row.get("recent_runs") or 0)
+        recent_failed = int(row.get("recent_failed_runs") or 0)
+        rate = float(row.get("recent_failure_rate") or 0.0)
+        latest = str(row.get("latest_run_status") or row.get("status") or "").lower()
+        if recent_runs == 0:
+            if latest in {"failed", "error"}:
+                return "warning"
+            return "pending"
+        if latest in {"failed", "error"} and (recent_failed >= 2 or rate >= 0.5):
+            return "failing"
+        if recent_failed > 0:
+            return "warning"
+        if latest in {"completed", "success", "ok"} or recent_runs > 0:
+            return "healthy"
+        return "pending"
+
+    def _seed_default_auth_model(self) -> None:
+        now = self._now()
+        role_keys = [
+            "platform_admin",
+            "org_admin",
+            "dairy_manager",
+            "dairy_owner",
+            "farm_owner",
+            "veterinarian",
+            "processor_analyst",
+            "government_analyst",
+            "policy_maker",
+            "research_analyst",
+            "viewer",
+        ]
+        permissions = [
+            "view_portfolio",
+            "view_farm_profile",
+            "view_animal_profile",
+            "view_market_signals",
+            "view_disease_signals",
+            "view_data_quality",
+            "manage_connectors",
+            "manage_source_configs",
+            "manage_users",
+            "export_data",
+        ]
+        role_perm_map: dict[str, set[str]] = {
+            "platform_admin": set(permissions),
+            "org_admin": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_animal_profile",
+                "view_market_signals",
+                "view_disease_signals",
+                "view_data_quality",
+                "manage_connectors",
+                "manage_source_configs",
+                "manage_users",
+                "export_data",
+            },
+            "dairy_manager": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_animal_profile",
+                "view_market_signals",
+                "view_disease_signals",
+                "view_data_quality",
+                "export_data",
+            },
+            "dairy_owner": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_animal_profile",
+                "view_market_signals",
+                "view_disease_signals",
+                "view_data_quality",
+                "export_data",
+            },
+            "farm_owner": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_animal_profile",
+                "view_market_signals",
+                "view_disease_signals",
+                "view_data_quality",
+                "export_data",
+            },
+            "veterinarian": {
+                "view_farm_profile",
+                "view_animal_profile",
+                "view_disease_signals",
+                "view_data_quality",
+            },
+            "processor_analyst": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_market_signals",
+                "view_data_quality",
+                "export_data",
+            },
+            "government_analyst": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_market_signals",
+                "view_data_quality",
+                "export_data",
+            },
+            "policy_maker": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_animal_profile",
+                "view_market_signals",
+                "view_data_quality",
+                "export_data",
+            },
+            "research_analyst": {
+                "view_portfolio",
+                "view_farm_profile",
+                "view_animal_profile",
+                "view_market_signals",
+                "view_disease_signals",
+                "view_data_quality",
+                "export_data",
+            },
+            "viewer": {
+                "view_portfolio",
+                "view_farm_profile",
+            },
+        }
+        with self.connect() as conn:
+            for role_key in role_keys:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO roles (id, role_key, name, description, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (f"ROLE:{role_key}", role_key, role_key.replace("_", " ").title(), "", now),
+                )
+            for perm in permissions:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO permissions (id, permission_key, description, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (f"PERM:{perm}", perm, "", now),
+                )
+            for role_key, perms in role_perm_map.items():
+                for perm in perms:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO role_permissions (id, role_key, permission_key, created_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (f"RP:{role_key}:{perm}", role_key, perm, now),
+                    )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-ADMIN', 'dev-admin', 'dev-admin@local', 'Dev Admin', 1, '{}', ?, ?)
+                """,
+                (now, now),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-MANAGER', 'dev-manager', 'dev-manager@local', 'Dev Manager', 1, '{}', ?, ?)
+                """,
+                (now, now),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-OWNER', 'dev-owner', 'dev-owner@local', 'Dev Farm Owner', 1, '{}', ?, ?)
+                """,
+                (now, now),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (id, external_subject, email, display_name, is_active, metadata_json, created_at, updated_at)
+                VALUES ('DEV-POLICY', 'dev-policy', 'dev-policy@local', 'Dev Policy Maker', 1, '{}', ?, ?)
+                """,
+                (now, now),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-ADMIN:platform_admin', 'DEV-ADMIN', 'platform_admin', ?)
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-MANAGER:dairy_manager', 'DEV-MANAGER', 'dairy_manager', ?)
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-OWNER:farm_owner', 'DEV-OWNER', 'farm_owner', ?)
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_roles (id, user_id, role_key, created_at)
+                VALUES ('UR:DEV-POLICY:policy_maker', 'DEV-POLICY', 'policy_maker', ?)
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_organizations (id, user_id, organization_id, created_at)
+                VALUES ('UO:DEV-ADMIN:ORG-001', 'DEV-ADMIN', 'ORG-001', ?)
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_organizations (id, user_id, organization_id, created_at)
+                VALUES ('UO:DEV-MANAGER:ORG-001', 'DEV-MANAGER', 'ORG-001', ?)
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_farms (id, user_id, farm_id, created_at)
+                VALUES ('UF:DEV-MANAGER:FARM-001', 'DEV-MANAGER', 'FARM-001', ?)
+                """,
+                (now,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_farms (id, user_id, farm_id, created_at)
+                VALUES ('UF:DEV-OWNER:FARM-001', 'DEV-OWNER', 'FARM-001', ?)
+                """,
+                (now,),
+            )

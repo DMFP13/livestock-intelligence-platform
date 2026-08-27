@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -44,7 +45,7 @@ class IngestionPipeline:
                 "connector_name": connector.name,
                 "mode": mode,
                 "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "rows_raw": 0,
                 "rows_valid": 0,
                 "rows_normalized": 0,
@@ -81,6 +82,11 @@ class IngestionPipeline:
                 rows=raw_records,
             )
             valid_records, validation_errors = connector.validate(raw_records, context)
+            invalid_by_idx = self._extract_invalid_rows(validation_errors)
+            self.store.update_raw_source_validation(
+                ingestion_run_id=run_id,
+                invalid_by_index=invalid_by_idx,
+            )
             normalized = connector.normalize(valid_records, context)
             rows_stored = connector.upsert(normalized, context, self.store, run_id)
 
@@ -96,7 +102,7 @@ class IngestionPipeline:
                 run_id,
                 {
                     "status": "completed",
-                    "ended_at": datetime.utcnow().isoformat(),
+                    "ended_at": datetime.now(UTC).isoformat(),
                     "rows_raw": len(raw_records),
                     "rows_valid": len(valid_records),
                     "rows_normalized": all_normalized_rows,
@@ -116,7 +122,7 @@ class IngestionPipeline:
                 run_id,
                 {
                     "status": "failed",
-                    "ended_at": datetime.utcnow().isoformat(),
+                    "ended_at": datetime.now(UTC).isoformat(),
                     "error_log_json": json.dumps(errors, default=str),
                 },
             )
@@ -161,4 +167,19 @@ class IngestionPipeline:
                 if q not in out:
                     out[q] = 0
                 out[q] += 1
+        return out
+
+    @staticmethod
+    def _extract_invalid_rows(validation_errors: list[str]) -> dict[int, str]:
+        out: dict[int, str] = {}
+        for msg in validation_errors:
+            m = re.match(r"row\s+(\d+):\s*(.*)", str(msg))
+            if not m:
+                continue
+            idx = int(m.group(1))
+            reason = str(m.group(2) or "").strip() or "validation error"
+            if idx in out:
+                out[idx] = f"{out[idx]}; {reason}"
+            else:
+                out[idx] = reason
         return out

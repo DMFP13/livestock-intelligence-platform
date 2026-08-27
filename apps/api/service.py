@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 from typing import Any
 from uuid import uuid4
 
+from apps.api.auth import AuthPrincipal, AuthService, ForbiddenError, UnauthorizedError
 from packages.connectors.base import ConnectorContext
 from packages.connectors.disease_alert_scaffold import DiseaseAlertScaffoldConnector
 from packages.connectors.prices import PricesConnector
@@ -25,6 +26,8 @@ class PlatformService:
     def __init__(self, db_path: str = "data/platform.db"):
         self.store = SQLiteStore(db_path)
         self.store.migrate()
+        self.auth = AuthService(self.store)
+        self._current_principal: AuthPrincipal | None = None
         self.registry = ConnectorRegistry()
         self.registry.register("sensor_upload", SensorUploadConnector())
         self.registry.register("weather", WeatherConnector())
@@ -37,13 +40,102 @@ class PlatformService:
         self.pipeline = IngestionPipeline(self.registry, self.store)
         self.live = LiveSyncOrchestrator(self.store, self.pipeline)
 
+    def set_current_principal(self, principal: AuthPrincipal | None) -> None:
+        self._current_principal = principal
+
+    def get_current_principal(self) -> AuthPrincipal | None:
+        return self._current_principal
+
+    def _log_access(self, *, principal: AuthPrincipal | None, action: str, outcome: str, metadata: dict[str, Any] | None = None) -> None:
+        try:
+            self.store.insert_audit_log(
+                {
+                    "id": str(uuid4()),
+                    "occurred_at": datetime.now(UTC).isoformat(),
+                    "actor_user_id": principal.user_id if principal else None,
+                    "action": action,
+                    "resource_type": "service",
+                    "resource_id": None,
+                    "outcome": outcome,
+                    "metadata_json": json.dumps(metadata or {}, default=str),
+                }
+            )
+        except Exception:
+            # Audit logging must not break the main data path.
+            pass
+
+    def _require(
+        self,
+        permission: str,
+        *,
+        principal: AuthPrincipal | None = None,
+        organization_id: str | None = None,
+        farm_id: str | None = None,
+        allow_aggregate_only: bool = False,
+    ) -> AuthPrincipal:
+        actor = principal or self._current_principal
+        if actor is None and self.auth.config.dev_mode:
+            actor = self.auth.get_dev_principal()
+        try:
+            checked = self.auth.authorize(
+                actor,
+                permission=permission,
+                organization_id=organization_id,
+                farm_id=farm_id,
+                allow_aggregate_only=allow_aggregate_only,
+            )
+            self._log_access(principal=checked, action=permission, outcome="allowed")
+            return checked
+        except (UnauthorizedError, ForbiddenError):
+            self._log_access(
+                principal=actor,
+                action=permission,
+                outcome="denied",
+                metadata={"organization_id": organization_id, "farm_id": farm_id},
+            )
+            raise
+
+    @staticmethod
+    def _is_global_actor(actor: AuthPrincipal) -> bool:
+        return actor.has_role("platform_admin") or actor.has_role("policy_maker")
+
+    def _expand_farm_scope_from_orgs(self, org_scope: set[str], farm_scope: set[str]) -> set[str]:
+        if farm_scope or not org_scope:
+            return set(farm_scope)
+        farms = self.store.fetch_rows("farms", limit=100000)
+        return {
+            str(row.get("id"))
+            for row in farms
+            if row.get("id") is not None and str(row.get("organization_id") or "") in org_scope
+        }
+
+    def current_user(self, *, principal: AuthPrincipal | None = None) -> dict[str, Any]:
+        actor = principal or self._current_principal
+        if actor is None and self.auth.config.dev_mode:
+            actor = self.auth.get_dev_principal()
+        if actor is None:
+            raise UnauthorizedError("authentication required")
+        return {
+            "user_id": actor.user_id,
+            "email": actor.email,
+            "display_name": actor.display_name,
+            "roles": list(actor.roles),
+            "permissions": sorted(list(actor.permissions)),
+            "organization_ids": sorted(list(actor.organization_ids)),
+            "farm_ids": sorted(list(actor.farm_ids)),
+            "is_dev_mode": bool(actor.is_dev_mode),
+            "auth_provider": self.auth.config.provider,
+        }
+
     def run_ingestion(
         self,
         connector_key: str,
         source_system: str,
         mode: str,
         config: dict[str, Any],
+        principal: AuthPrincipal | None = None,
     ) -> dict[str, Any]:
+        self._require("manage_connectors", principal=principal)
         return self.pipeline.run(
             IngestionRequest(
                 connector_key=connector_key,
@@ -55,33 +147,73 @@ class PlatformService:
         )
 
     def list_farms(self, limit: int = 200) -> list[dict[str, Any]]:
-        return self.store.fetch_rows("farms", limit=limit)
+        actor = self._require("view_farm_profile")
+        org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
+        farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
+        if not self._is_global_actor(actor) and not org_scope and not farm_scope:
+            return []
+        return self.store.fetch_rows_scoped("farms", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
 
     def list_animals(self, limit: int = 200) -> list[dict[str, Any]]:
-        return self.store.fetch_rows("animals", limit=limit)
+        actor = self._require("view_animal_profile")
+        org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
+        farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
+        if not self._is_global_actor(actor) and not org_scope and not farm_scope:
+            return []
+        return self.store.fetch_rows_scoped("animals", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
 
     def list_observations(self, limit: int = 200) -> list[dict[str, Any]]:
-        return self.store.fetch_rows("observations", limit=limit)
+        actor = self._require("view_farm_profile", allow_aggregate_only=True)
+        org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
+        farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
+        if not self._is_global_actor(actor) and not org_scope and not farm_scope:
+            return []
+        rows = self.store.fetch_rows_scoped("observations", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
+        if actor.has_role("government_analyst"):
+            return [r for r in rows if not r.get("animal_id")]
+        return rows
 
     def list_events(self, limit: int = 200) -> list[dict[str, Any]]:
-        return self.store.fetch_rows("events", limit=limit)
+        actor = self._require("view_animal_profile")
+        org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
+        farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
+        if not self._is_global_actor(actor) and not org_scope and not farm_scope:
+            return []
+        return self.store.fetch_rows_scoped("events", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
 
     def list_alerts(self, limit: int = 200) -> list[dict[str, Any]]:
-        return self.store.fetch_rows("alerts", limit=limit)
+        actor = self._require("view_farm_profile", allow_aggregate_only=True)
+        org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
+        farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
+        if not self._is_global_actor(actor) and not org_scope and not farm_scope:
+            return []
+        rows = self.store.fetch_rows_scoped("alerts", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
+        if actor.has_role("government_analyst"):
+            return [r for r in rows if not r.get("animal_id")]
+        return rows
 
     def list_reference_series(self, limit: int = 200) -> list[dict[str, Any]]:
-        return self.store.fetch_rows("reference_series", limit=limit)
+        actor = self._require("view_market_signals", allow_aggregate_only=True)
+        org_scope, farm_scope = self.auth.resolve_actor_scope(actor)
+        farm_scope = self._expand_farm_scope_from_orgs(org_scope, farm_scope)
+        if not self._is_global_actor(actor) and not org_scope and not farm_scope:
+            return []
+        return self.store.fetch_rows_scoped("reference_series", limit=limit, organization_ids=org_scope, farm_ids=farm_scope)
 
     def list_ingestion_runs(self, limit: int = 100) -> list[dict[str, Any]]:
+        self._require("view_data_quality")
         return self.store.fetch_rows("ingestion_runs", limit=limit)
 
     def get_ingestion_run(self, run_id: str) -> dict[str, Any] | None:
+        self._require("view_data_quality")
         return self.store.fetch_run(run_id)
 
     def data_quality_summary(self) -> dict[str, Any]:
+        self._require("view_data_quality")
         return self.store.fetch_data_quality_summary()
 
     def list_connectors_metadata(self) -> list[dict[str, Any]]:
+        self._require("view_data_quality")
         return self.registry.list_descriptions()
 
     def upsert_source_config(
@@ -98,8 +230,10 @@ class PlatformService:
         webhook_secret_ref: str | None = None,
         config: dict[str, Any] | None = None,
         retry_max: int = 2,
+        principal: AuthPrincipal | None = None,
     ) -> dict[str, Any]:
-        now = datetime.utcnow().isoformat()
+        self._require("manage_source_configs", principal=principal)
+        now = datetime.now(UTC).isoformat()
         existing = self.store.fetch_source_configs(
             connector_key=connector_key,
             mode=mode,
@@ -166,6 +300,7 @@ class PlatformService:
         return self.store.fetch_source_config(source_id) or row
 
     def get_source_config(self, source_config_id: str) -> dict[str, Any] | None:
+        self._require("view_data_quality")
         return self.store.fetch_source_config(source_config_id)
 
     def list_source_configs(
@@ -176,6 +311,7 @@ class PlatformService:
         active_only: bool = False,
         limit: int = 500,
     ) -> list[dict[str, Any]]:
+        self._require("view_data_quality")
         return self.store.fetch_source_configs(
             connector_key=connector_key,
             mode=mode,
@@ -184,12 +320,15 @@ class PlatformService:
         )
 
     def run_live_poll_cycle(self, *, max_jobs: int = 10) -> list[dict[str, Any]]:
+        self._require("manage_connectors")
         return self.live.run_due_polls(max_jobs=max_jobs)
 
     def run_live_sync_for_source(self, source_config_id: str) -> dict[str, Any]:
+        self._require("manage_connectors")
         return self.live.run_source_config(source_config_id)
 
     def set_source_config_active(self, source_config_id: str, is_active: bool) -> dict[str, Any]:
+        self._require("manage_source_configs")
         cfg = self.store.fetch_source_config(source_config_id)
         if cfg is None:
             raise ValueError("source config not found")
@@ -210,11 +349,12 @@ class PlatformService:
             if not ok:
                 raise ValueError(f"cannot activate source config: {msg}")
         cfg["is_active"] = 1 if is_active else 0
-        cfg["updated_at"] = datetime.utcnow().isoformat()
+        cfg["updated_at"] = datetime.now(UTC).isoformat()
         self.store.upsert_source_config(cfg)
         return self.store.fetch_source_config(source_config_id) or cfg
 
     def test_source_config(self, source_config_id: str) -> dict[str, Any]:
+        self._require("manage_source_configs")
         cfg = self.store.fetch_source_config(source_config_id)
         if cfg is None:
             return {"source_config_id": source_config_id, "ok": False, "message": "source config not found"}
@@ -239,6 +379,7 @@ class PlatformService:
         payload_rows: list[dict[str, Any]],
         config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        self._require("manage_connectors")
         return self.live.trigger_webhook(
             connector_key=connector_key,
             source_system=source_system,
@@ -247,6 +388,7 @@ class PlatformService:
         )
 
     def source_health_summary(self) -> dict[str, Any]:
+        self._require("view_data_quality")
         return self.store.fetch_source_health_summary()
 
     @staticmethod

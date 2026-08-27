@@ -33,3 +33,13 @@ Each ingested record carries:
 ## Compatibility Modes
 - `uploaded_file` mode for CSV-first ingestion
 - `api` mode scaffold for future live connectors
+
+## Authentication and Authorization
+- Centralized auth/authz foundation is implemented in API/service layer.
+- RBAC + scope enforcement combines:
+  - roles and permissions
+  - organization membership
+  - farm-level access mappings
+- Streamlit uses session auth bootstrap with role-aware navigation, but backend/service checks remain the security boundary.
+- Dev mode fallback is available for local operation when enterprise IdP configuration is absent.
+- See `docs/auth-architecture.md` for full details.

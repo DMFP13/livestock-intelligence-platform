@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -54,7 +54,7 @@ class DiseaseAlertScaffoldConnector:
                 alert_at = datetime.fromisoformat(str(row["alert_at"]))
                 quality = QualityFlag.good.value
             except ValueError:
-                alert_at = datetime.utcnow()
+                alert_at = datetime.now(UTC)
                 quality = QualityFlag.suspect.value
             alerts.append(
                 {
@@ -70,7 +70,7 @@ class DiseaseAlertScaffoldConnector:
                     "source_system": context.source_system,
                     "source_record_id": str(row.get("sourceRecordId") or ""),
                     "metadata_json": "{}",
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 }
             )
         return {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -59,6 +59,6 @@ class EntityAliasService:
                 "alias_value": alias_value,
                 "confidence": max(0.0, min(1.0, float(confidence))),
                 "metadata_json": self.store._json(metadata or {}),
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
         )

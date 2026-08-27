@@ -9,7 +9,7 @@ from services.operator_controls import (
     create_or_update_source_config,
     list_source_operator_rows,
     run_sync_now,
-    test_connector_config,
+    run_connector_config_test,
     toggle_connector_active,
 )
 
@@ -37,7 +37,7 @@ class TestOperatorControls(unittest.TestCase):
             self.assertEqual(rows[0]["status"], "inactive")
             self.assertIn("provider", rows[0]["config_summary"])
 
-            test_result = test_connector_config(service, str(cfg["id"]))
+            test_result = run_connector_config_test(service, str(cfg["id"]))
             self.assertFalse(bool(test_result["ok"]))
 
     def test_manual_actions_enable_and_run(self) -> None:

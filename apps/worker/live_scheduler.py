@@ -3,13 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from apps.api.service import PlatformService
 
 
 def run_scheduler_once(service: PlatformService, *, max_jobs: int = 10) -> list[dict]:
-    started = datetime.utcnow().isoformat()
+    started = datetime.now(UTC).isoformat()
     print(f"[live-scheduler] cycle_start={started} max_jobs={max_jobs}")
     results = service.run_live_poll_cycle(max_jobs=max_jobs)
     completed = sum(1 for r in results if str(r.get("status")) == "completed")

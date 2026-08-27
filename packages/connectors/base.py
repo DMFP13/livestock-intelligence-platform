@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 
@@ -20,7 +20,7 @@ class ConnectorCapabilities:
 class ConnectorContext:
     source_system: str
     mode: str
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     config: dict[str, Any] = field(default_factory=dict)
 
 

@@ -9,8 +9,17 @@ from services.rating_engine import compute_cow_rating, compute_cow_review_priori
 
 
 def build_farm_summary_table(df: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "farm_id",
+        "farm_name",
+        "animals",
+        "records",
+        "avg_rumination_min",
+        "avg_activity_rate",
+        "avg_milk_yield_l",
+    ]
     if "farm_id" not in df.columns:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=columns)
 
     rows = []
     for farm_id, farm_df in df.groupby("farm_id"):
@@ -26,7 +35,9 @@ def build_farm_summary_table(df: pd.DataFrame) -> pd.DataFrame:
             }
         )
 
-    return pd.DataFrame(rows).sort_values("farm_id")
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows, columns=columns).sort_values("farm_id")
 
 
 def build_farm_timeseries(df: pd.DataFrame, farm_id: str, metric: str) -> pd.DataFrame:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -79,7 +79,7 @@ class RemoteSensingScaffoldConnector:
             ts = self._parse_timestamp(str(row["observed_at"]))
             quality = QualityFlag.good.value
             if ts is None:
-                ts = datetime.utcnow()
+                ts = datetime.now(UTC)
                 quality = QualityFlag.suspect.value
                 suspect_timestamps += 1
 
@@ -119,7 +119,7 @@ class RemoteSensingScaffoldConnector:
                     "source_system": context.source_system,
                     "source_record_id": str(row.get("sourceRecordId") or row.get("scene_id") or ""),
                     "metadata_json": json.dumps(metadata, default=str),
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 }
             )
 

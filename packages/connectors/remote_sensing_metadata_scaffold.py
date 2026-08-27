@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -55,7 +55,7 @@ class RemoteSensingMetadataScaffoldConnector:
                 ts = datetime.fromisoformat(str(row["observed_at"]))
                 quality = QualityFlag.good.value
             except ValueError:
-                ts = datetime.utcnow()
+                ts = datetime.now(UTC)
                 quality = QualityFlag.suspect.value
 
             metadata = {
@@ -79,7 +79,7 @@ class RemoteSensingMetadataScaffoldConnector:
                     "source_system": context.source_system,
                     "source_record_id": str(row.get("scene_id") or row.get("sourceRecordId") or ""),
                     "metadata_json": json.dumps(metadata, default=str),
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 }
             )
         return {

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from packages.core import QualityFlag
@@ -14,7 +17,7 @@ class PricesConnector:
     name = "prices"
     CAPABILITIES = ConnectorCapabilities(
         modes=["polling", "webhook", "manual_upload"],
-        required_config=["endpoint_url"],
+        required_config=[],
         supported_entity_levels=["network", "farm"],
         supported_signals=["beef_price", "dairy_price", "feed_price", "fx_rate", "finance_indicator"],
         supports_polling=True,
@@ -36,6 +39,11 @@ class PricesConnector:
         if context.mode in {"uploaded_file", "manual_upload", "webhook"}:
             return True, "ok"
         if context.mode in {"api", "polling"} and context.config.get("enabled"):
+            provider = str(context.config.get("provider") or "custom").lower()
+            if provider == "frankfurter":
+                if not context.config.get("from_currency") or not context.config.get("to_currency"):
+                    return False, "missing from_currency/to_currency for frankfurter provider"
+                return True, "configured"
             if not context.config.get("endpoint_url"):
                 return False, "missing endpoint_url"
             if not self._has_auth(context.config):
@@ -48,6 +56,9 @@ class PricesConnector:
         if rows:
             return list(rows)
         if context.mode == "polling" and context.config.get("enabled"):
+            provider = str(context.config.get("provider") or "custom").lower()
+            if provider == "frankfurter":
+                return self._fetch_frankfurter_rows(context)
             endpoint = str(context.config.get("endpoint_url") or "")
             if not endpoint:
                 raise ValueError("missing endpoint_url")
@@ -92,7 +103,7 @@ class PricesConnector:
                     "source_system": context.source_system,
                     "source_record_id": str(row.get("sourceRecordId") or ""),
                     "metadata_json": "{}",
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -125,3 +136,38 @@ class PricesConnector:
             if isinstance(headers, dict) and len(headers) > 0:
                 return True
         return False
+
+    def _fetch_frankfurter_rows(self, context: ConnectorContext) -> list[dict[str, Any]]:
+        from_currency = str(context.config.get("from_currency") or "").upper()
+        to_currency = str(context.config.get("to_currency") or "").upper()
+        if not from_currency or not to_currency:
+            raise ValueError("missing from_currency/to_currency for frankfurter provider")
+
+        endpoint = str(context.config.get("endpoint_url") or "https://api.frankfurter.app/latest")
+        qp = urlencode({"from": from_currency, "to": to_currency})
+        url = f"{endpoint}?{qp}" if "?" not in endpoint else f"{endpoint}&{qp}"
+        req = Request(url=url, headers={"Accept": "application/json"}, method="GET")
+        with urlopen(req, timeout=int(context.config.get("timeout_sec") or 20)) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+
+        if isinstance(payload, list):
+            return [dict(r) for r in payload if isinstance(r, dict)]
+        if not isinstance(payload, dict):
+            raise ValueError("frankfurter response was not an object")
+
+        out: list[dict[str, Any]] = []
+        rates = payload.get("rates")
+        if isinstance(rates, dict) and to_currency in rates:
+            out.append(
+                {
+                    "timestamp": f"{payload.get('date')}T00:00:00",
+                    "series_type": "fx_rate",
+                    "series_key": f"{from_currency.lower()}_{to_currency.lower()}",
+                    "value": rates[to_currency],
+                    "unit": "ratio",
+                    "sourceRecordId": str(payload.get("date") or ""),
+                }
+            )
+        if not out:
+            raise ValueError("frankfurter response did not include target currency rate")
+        return out

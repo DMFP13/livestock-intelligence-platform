@@ -6,6 +6,11 @@ import pandas as pd
 
 from apps.api.service import PlatformService
 from packages.analytics.thi import compute_thi
+from packages.intelligence import (
+    compute_heat_stress_features,
+    compute_herd_metrics_features,
+    write_feature_payload_to_canonical,
+)
 from services.live_visibility import connector_visibility
 
 REMOTE_SENSING_METRICS = [
@@ -23,10 +28,33 @@ def _available_metrics(df: pd.DataFrame) -> list[str]:
     return [m for m in candidates if m in df.columns]
 
 
+def _processed_to_observation_rows(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty or "date" not in df.columns:
+        return pd.DataFrame(columns=["metric", "value_num", "observed_at", "farm_id", "herd_id", "animal_id"])
+    metrics = [
+        c
+        for c in ["rumination_min", "eating_min", "activity_rate", "temperature_c", "humidity_pct", "thi"]
+        if c in df.columns
+    ]
+    if not metrics:
+        return pd.DataFrame(columns=["metric", "value_num", "observed_at", "farm_id", "herd_id", "animal_id"])
+    id_vars = [c for c in ["date", "farm_id", "herd_id", "animal_id"] if c in df.columns]
+    long_df = df[id_vars + metrics].melt(
+        id_vars=id_vars,
+        value_vars=metrics,
+        var_name="metric",
+        value_name="value_num",
+    )
+    long_df = long_df.dropna(subset=["date"])
+    long_df["observed_at"] = pd.to_datetime(long_df["date"], errors="coerce")
+    return long_df.drop(columns=["date"], errors="ignore")
+
+
 def query_weather_observations(
     service: PlatformService | None,
     *,
     limit: int = 20000,
+    farm_id: str | None = None,
 ) -> pd.DataFrame:
     cols = ["date", "temperature_c", "humidity_pct", "thi"]
     if service is None:
@@ -37,9 +65,17 @@ def query_weather_observations(
     obs = pd.DataFrame(rows)
     if obs.empty or "metric" not in obs.columns or "observed_at" not in obs.columns:
         return pd.DataFrame(columns=cols)
+    if farm_id and "farm_id" in obs.columns:
+        obs = obs[obs["farm_id"].astype(str) == str(farm_id)].copy()
+        if obs.empty:
+            return pd.DataFrame(columns=cols)
     obs = obs[obs["metric"].astype(str).isin(WEATHER_METRICS)].copy()
     if obs.empty:
         return pd.DataFrame(columns=cols)
+    if "source_system" in obs.columns:
+        local_like = obs["source_system"].astype(str).str.contains("weather|meteo|local", case=False, regex=True)
+        if local_like.any():
+            obs = obs[local_like].copy()
     obs["date"] = pd.to_datetime(obs["observed_at"], errors="coerce")
     obs = obs.dropna(subset=["date"])
     if obs.empty:
@@ -104,6 +140,8 @@ def build_feed_environment_payload(
     *,
     service: PlatformService | None = None,
     connector_keys: list[str] | None = None,
+    selected_farm: str | None = None,
+    write_features_to_store: bool = False,
 ) -> dict[str, Any]:
     connector_registered = "remote_sensing_scaffold" in (connector_keys or [])
     remote_df = query_remote_sensing_observations(service)
@@ -111,7 +149,24 @@ def build_feed_environment_payload(
     live_weather_status = connector_visibility(service, "weather")
 
     if df is None or df.empty:
-        live_weather_df = query_weather_observations(service)
+        live_weather_df = query_weather_observations(service, farm_id=selected_farm)
+        base_obs = pd.DataFrame(columns=["metric", "value_num", "observed_at", "farm_id", "herd_id", "animal_id"])
+        if not live_weather_df.empty:
+            base_obs = live_weather_df.rename(columns={"date": "observed_at"}).copy()
+            base_obs = base_obs.melt(
+                id_vars=["observed_at"],
+                value_vars=[c for c in ["temperature_c", "humidity_pct", "thi"] if c in base_obs.columns],
+                var_name="metric",
+                value_name="value_num",
+            )
+            base_obs["farm_id"] = None
+            base_obs["herd_id"] = None
+            base_obs["animal_id"] = None
+        heat_features = compute_heat_stress_features(base_obs)
+        herd_features = compute_herd_metrics_features(base_obs)
+        if write_features_to_store and service is not None:
+            write_feature_payload_to_canonical(service, heat_features, source_system="intelligence.heat_stress")
+            write_feature_payload_to_canonical(service, herd_features, source_system="intelligence.herd_metrics")
         if not live_weather_df.empty:
             live_weather_df["date_day"] = live_weather_df["date"].dt.floor("D")
             ts = live_weather_df.groupby("date_day", as_index=False).agg(
@@ -131,11 +186,16 @@ def build_feed_environment_payload(
                 ],
                 "derived": {
                     "days": int(len(ts)),
-                    "heat_stress_days": int((ts["thi"] >= 72).sum()) if "thi" in ts.columns else None,
+                    "heat_stress_days": int(heat_features.get("summary", {}).get("heat_stress_days") or 0),
                     "has_environment_signals": True,
                 },
                 "remote_sensing": remote_summary,
                 "live_weather": live_weather_status,
+                "features": {
+                    "heat_stress": heat_features,
+                    "herd_metrics": herd_features,
+                },
+                "cause_effect": ts[[c for c in ["date", "thi", "rumination_min"] if c in ts.columns]].copy(),
             }
         return {
             "status": "empty",
@@ -145,6 +205,11 @@ def build_feed_environment_payload(
             "derived": {},
             "remote_sensing": remote_summary,
             "live_weather": live_weather_status,
+            "features": {
+                "heat_stress": heat_features,
+                "herd_metrics": herd_features,
+            },
+            "cause_effect": pd.DataFrame(),
         }
 
     if "date" not in df.columns:
@@ -185,7 +250,7 @@ def build_feed_environment_payload(
     source["date_day"] = source["date"].dt.floor("D")
     ts = source.groupby("date_day", as_index=False).agg({m: "mean" for m in metrics}).rename(columns={"date_day": "date"})
 
-    live_weather_df = query_weather_observations(service)
+    live_weather_df = query_weather_observations(service, farm_id=selected_farm)
     if not live_weather_df.empty:
         live_weather_df["date_day"] = live_weather_df["date"].dt.floor("D")
         live_ts = live_weather_df.groupby("date_day", as_index=False).agg(
@@ -202,6 +267,13 @@ def build_feed_environment_payload(
     if "thi" not in ts.columns and {"temperature_c", "humidity_pct"}.issubset(set(ts.columns)):
         ts["thi"] = ts.apply(lambda r: compute_thi(float(r["temperature_c"]), float(r["humidity_pct"])), axis=1)
         metrics = metrics + ["thi"]
+
+    base_obs = _processed_to_observation_rows(source)
+    heat_features = compute_heat_stress_features(base_obs)
+    herd_features = compute_herd_metrics_features(base_obs)
+    if write_features_to_store and service is not None:
+        write_feature_payload_to_canonical(service, heat_features, source_system="intelligence.heat_stress")
+        write_feature_payload_to_canonical(service, herd_features, source_system="intelligence.herd_metrics")
 
     current_metrics: list[dict[str, Any]] = []
     for metric in metrics:
@@ -220,7 +292,7 @@ def build_feed_environment_payload(
 
     derived = {
         "days": int(len(ts)),
-        "heat_stress_days": int((ts["thi"] >= 72).sum()) if "thi" in ts.columns else None,
+        "heat_stress_days": int(heat_features.get("summary", {}).get("heat_stress_days") or 0),
         "has_environment_signals": bool({"temperature_c", "humidity_pct", "thi"}.intersection(set(ts.columns))),
     }
 
@@ -232,4 +304,9 @@ def build_feed_environment_payload(
         "derived": derived,
         "remote_sensing": remote_summary,
         "live_weather": live_weather_status,
+        "features": {
+            "heat_stress": heat_features,
+            "herd_metrics": herd_features,
+        },
+        "cause_effect": ts[[c for c in ["date", "thi", "rumination_min"] if c in ts.columns]].copy(),
     }

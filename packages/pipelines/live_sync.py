@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+import random
+import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -16,7 +18,7 @@ class LiveSyncOrchestrator:
         self.ingestion = ingestion
 
     def run_due_polls(self, *, now: datetime | None = None, max_jobs: int = 10) -> list[dict[str, Any]]:
-        now = now or datetime.utcnow()
+        now = now or datetime.now(UTC)
         configs = self.store.fetch_source_configs(mode="polling", active_only=True, limit=max_jobs * 4)
         due = [c for c in configs if self._is_due(c, now, self.store.fetch_source_sync_status(str(c["id"])))] [:max_jobs]
         results: list[dict[str, Any]] = []
@@ -25,13 +27,16 @@ class LiveSyncOrchestrator:
         return results
 
     def run_source_config(self, source_config_id: str, *, now: datetime | None = None) -> dict[str, Any]:
-        now = now or datetime.utcnow()
+        now = now or datetime.now(UTC)
         cfg = self.store.fetch_source_config(source_config_id)
         if cfg is None:
             return {"source_config_id": source_config_id, "status": "failed", "error": "source config not found"}
 
         retry_max = int(cfg.get("retry_max") or 2)
         interval_sec = int(cfg.get("polling_interval_sec") or 300)
+        retry_base_delay_sec = self._safe_float(cfg.get("retry_base_delay_sec"), default=0.25)
+        retry_min_delay_sec = self._safe_float(cfg.get("retry_min_delay_sec"), default=0.1)
+        retry_jitter_sec = self._safe_float(cfg.get("retry_jitter_sec"), default=0.2)
         connector_key = str(cfg["connector_key"])
         source_system = str(cfg["source_system"])
         mode = str(cfg["mode"])
@@ -63,6 +68,20 @@ class LiveSyncOrchestrator:
                     error_message=None,
                 )
                 return {"source_config_id": source_config_id, **latest_result, "retry_count": attempt}
+            if attempt < retry_max:
+                retry_delay = self._retry_delay_seconds(
+                    attempt=attempt,
+                    base_delay_sec=retry_base_delay_sec,
+                    min_delay_sec=retry_min_delay_sec,
+                    jitter_sec=retry_jitter_sec,
+                )
+                self._record_retry_delay_metadata(
+                    run_id=str(latest_result.get("id") or ""),
+                    source_config_id=source_config_id,
+                    attempt=attempt + 1,
+                    delay_sec=retry_delay,
+                )
+                time.sleep(retry_delay)
             attempt += 1
 
         prev = self.store.fetch_source_sync_status(source_config_id) or {}
@@ -80,6 +99,37 @@ class LiveSyncOrchestrator:
             error_message=error_message,
         )
         return {"source_config_id": source_config_id, **latest_result, "retry_count": retry_max, "error": error_message}
+
+    def _record_retry_delay_metadata(
+        self,
+        *,
+        run_id: str,
+        source_config_id: str,
+        attempt: int,
+        delay_sec: float,
+    ) -> None:
+        if not run_id:
+            return
+        run_row = self.store.fetch_run(run_id) or {}
+        meta = {}
+        raw_meta = run_row.get("metadata_json")
+        if raw_meta:
+            try:
+                parsed = json.loads(str(raw_meta))
+                if isinstance(parsed, dict):
+                    meta = dict(parsed)
+            except json.JSONDecodeError:
+                meta = {}
+        retries = list(meta.get("retry_plan", []))
+        retries.append(
+            {
+                "source_config_id": source_config_id,
+                "attempt": int(attempt),
+                "delay_sec": round(float(delay_sec), 4),
+            }
+        )
+        meta["retry_plan"] = retries
+        self.store.update_run_status(run_id, {"metadata_json": json.dumps(meta, default=str)})
 
     def trigger_webhook(
         self,
@@ -184,3 +234,23 @@ class LiveSyncOrchestrator:
             except ValueError:
                 return True
         return True
+
+    @staticmethod
+    def _retry_delay_seconds(
+        *,
+        attempt: int,
+        base_delay_sec: float,
+        min_delay_sec: float,
+        jitter_sec: float,
+    ) -> float:
+        exp = max(base_delay_sec, 0.0) * (2**max(attempt, 0))
+        jitter = random.uniform(0.0, max(jitter_sec, 0.0))
+        delay = exp + jitter
+        return max(float(min_delay_sec), float(delay))
+
+    @staticmethod
+    def _safe_float(value: Any, *, default: float) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)

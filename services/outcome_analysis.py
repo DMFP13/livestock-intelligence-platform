@@ -243,8 +243,15 @@ def _association_confidence_vs_usable(df: pd.DataFrame) -> dict[str, Any] | None
 
 
 def _aggregate_level(df: pd.DataFrame, level_col: str) -> pd.DataFrame:
+    columns = [
+        level_col,
+        "rows",
+        "health_risk_milk_drop_delta_pct",
+        "estrus_insemination_delta_pct",
+        "confidence_usable_delta_pct",
+    ]
     if level_col not in df.columns:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=columns)
 
     rows = []
     for entity, subset in df.groupby(level_col):
@@ -262,7 +269,9 @@ def _aggregate_level(df: pd.DataFrame, level_col: str) -> pd.DataFrame:
             }
         )
 
-    return pd.DataFrame(rows).sort_values("rows", ascending=False)
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows, columns=columns).sort_values("rows", ascending=False)
 
 
 def build_outcome_linkage_analysis(

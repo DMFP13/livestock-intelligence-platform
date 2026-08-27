@@ -16,7 +16,13 @@ def connector_visibility(service: PlatformService | None, connector_key: str) ->
     if connector_key not in registered:
         return {"status": "not_registered", "message": f"Connector '{connector_key}' is not registered."}
 
-    configs = [c for c in service.list_source_configs(connector_key=connector_key, limit=1000) if c.get("mode") == "polling"]
+    try:
+        configs = [c for c in service.list_source_configs(connector_key=connector_key, limit=1000) if c.get("mode") == "polling"]
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "message": f"Failed to query source configs: {exc}",
+        }
     if not configs:
         return {
             "status": "not_configured",
@@ -31,10 +37,22 @@ def connector_visibility(service: PlatformService | None, connector_key: str) ->
             "configs": len(configs),
         }
 
-    health = service.source_health_summary()
+    try:
+        health = service.source_health_summary()
+    except Exception as exc:
+        return {
+            "status": "active_unknown",
+            "message": f"{connector_key} connector configured, but source health query failed: {exc}",
+            "active_configs": len(active),
+        }
     by_id = {str(r.get("source_config_id")): r for r in (health.get("sources") or [])}
     statuses = [by_id.get(str(c.get("id")), {}) for c in active]
-    failing = [s for s in statuses if str(s.get("status") or "").lower() in {"failed", "error"}]
+    failing = [
+        s
+        for s in statuses
+        if str(s.get("health_class") or "").lower() == "failing"
+        or str(s.get("status") or "").lower() in {"failed", "error"}
+    ]
     succeeded = [s for s in statuses if s.get("last_success_at")]
     latest_success = max([str(s.get("last_success_at")) for s in succeeded], default=None)
     latest_failure = max([str(s.get("last_error_at")) for s in failing if s.get("last_error_at")], default=None)

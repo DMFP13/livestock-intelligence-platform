@@ -69,7 +69,7 @@ def run_sync_now(service: PlatformService, source_config_id: str) -> dict[str, A
     return service.run_live_sync_for_source(source_config_id)
 
 
-def test_connector_config(service: PlatformService, source_config_id: str) -> dict[str, Any]:
+def run_connector_config_test(service: PlatformService, source_config_id: str) -> dict[str, Any]:
     return service.test_source_config(source_config_id)
 
 

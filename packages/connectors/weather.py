@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from packages.analytics.thi import classify_heat_stress, compute_thi
@@ -15,7 +18,7 @@ class WeatherConnector:
     name = "weather"
     CAPABILITIES = ConnectorCapabilities(
         modes=["polling", "webhook", "manual_upload"],
-        required_config=["endpoint_url"],
+        required_config=[],
         supported_entity_levels=["farm", "location"],
         supported_signals=["temperature_c", "humidity_pct", "thi", "heat_stress_alert"],
         supports_polling=True,
@@ -33,6 +36,11 @@ class WeatherConnector:
         if context.mode in {"uploaded_file", "manual_upload", "webhook"}:
             return True, "ok"
         if context.mode in {"api", "polling"} and context.config.get("enabled"):
+            provider = str(context.config.get("provider") or "custom").lower()
+            if provider == "open_meteo":
+                if context.config.get("lat") in (None, "") or context.config.get("lon") in (None, ""):
+                    return False, "missing lat/lon for open_meteo provider"
+                return True, "configured"
             if not context.config.get("endpoint_url"):
                 return False, "missing endpoint_url"
             if not self._has_auth(context.config):
@@ -45,6 +53,9 @@ class WeatherConnector:
         if rows:
             return list(rows)
         if context.mode == "polling" and context.config.get("enabled"):
+            provider = str(context.config.get("provider") or "custom").lower()
+            if provider == "open_meteo":
+                return self._fetch_open_meteo_rows(context)
             endpoint = str(context.config.get("endpoint_url") or "")
             if not endpoint:
                 raise ValueError("missing endpoint_url")
@@ -99,7 +110,7 @@ class WeatherConnector:
                         "source_system": context.source_system,
                         "source_record_id": str(row.get("sourceRecordId") or ""),
                         "metadata_json": "{}",
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                     }
                 )
             thi = compute_thi(temperature, humidity)
@@ -122,7 +133,7 @@ class WeatherConnector:
                     "source_system": context.source_system,
                     "source_record_id": str(row.get("sourceRecordId") or ""),
                     "metadata_json": "{}",
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 }
             )
             if band in {"moderate", "severe"}:
@@ -140,7 +151,7 @@ class WeatherConnector:
                         "source_system": context.source_system,
                         "source_record_id": str(row.get("sourceRecordId") or ""),
                         "metadata_json": "{}",
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                     }
                 )
         return {
@@ -163,6 +174,40 @@ class WeatherConnector:
             store.upsert_alert(row)
             written += 1
         return written
+
+    def _fetch_open_meteo_rows(self, context: ConnectorContext) -> list[dict[str, Any]]:
+        lat = context.config.get("lat")
+        lon = context.config.get("lon")
+        if lat in (None, "") or lon in (None, ""):
+            raise ValueError("missing lat/lon for open_meteo provider")
+        endpoint = str(context.config.get("endpoint_url") or "https://api.open-meteo.com/v1/forecast")
+        qp = urlencode(
+            {
+                "latitude": lat,
+                "longitude": lon,
+                "current": "temperature_2m,relative_humidity_2m",
+                "timezone": "UTC",
+            }
+        )
+        url = f"{endpoint}?{qp}" if "?" not in endpoint else f"{endpoint}&{qp}"
+        req = Request(url=url, headers={"Accept": "application/json"}, method="GET")
+        with urlopen(req, timeout=int(context.config.get("timeout_sec") or 20)) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+
+        if not isinstance(payload, dict):
+            raise ValueError("open_meteo response was not an object")
+        current = payload.get("current")
+        if not isinstance(current, dict):
+            raise ValueError("open_meteo response missing 'current' object")
+        row = {
+            "timestamp": current.get("time"),
+            "temperature_c": current.get("temperature_2m"),
+            "humidity_pct": current.get("relative_humidity_2m"),
+            "sourceRecordId": current.get("time"),
+            "farm_id": context.config.get("farm_id"),
+            "location_id": context.config.get("location_id"),
+        }
+        return [row]
 
     @staticmethod
     def _has_auth(config: dict[str, Any]) -> bool:

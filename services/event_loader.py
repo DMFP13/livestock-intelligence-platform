@@ -48,6 +48,10 @@ MILK_COLUMN_MAP = {
     "milk_yield_l": "milk_yield_l",
     "milk_l": "milk_yield_l",
     "milk_liters": "milk_yield_l",
+    "estimated_milk_production_(l/day)": "milk_yield_l",
+    "estimated_milk_production_l/day": "milk_yield_l",
+    "estimated_milk_production_l_per_day": "milk_yield_l",
+    "estimated_milk_production": "milk_yield_l",
     "farm_id": "farm_id",
     "farm_name": "farm_name",
 }
@@ -117,7 +121,7 @@ def _coerce_types(df: pd.DataFrame, fields: list[EventField]) -> pd.DataFrame:
         if field.name not in out.columns:
             continue
         if field.dtype == "datetime64[ns]":
-            out[field.name] = pd.to_datetime(out[field.name], errors="coerce")
+            out[field.name] = pd.to_datetime(out[field.name], errors="coerce", dayfirst=True)
         elif field.dtype in {"float64", "Int64"}:
             out[field.name] = pd.to_numeric(out[field.name], errors="coerce")
             if field.dtype == "Int64":
@@ -185,3 +189,72 @@ def load_reproduction_events(input_obj: str | Path | BinaryIO, source_label: str
     df = df[[c for c in fields if c in df.columns]]
     validation = _validate(df, REPRO_FIELDS, date_col="event_date")
     return df, validation
+
+
+def discover_milk_event_files(directory: str | Path) -> list[Path]:
+    root = Path(directory)
+    if not root.exists() or not root.is_dir():
+        return []
+    files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".csv", ".xlsx", ".xls"}]
+    preferred = [
+        p
+        for p in files
+        if any(token in p.name.lower() for token in ("milk", "production", "yield", "lactation"))
+    ]
+    if preferred:
+        return sorted(preferred)
+    return sorted(files)
+
+
+def _empty_milk_validation(source_label: str) -> dict[str, Any]:
+    return {
+        "row_count": 0,
+        "missing_required_columns": [],
+        "missing_required_values": {},
+        "invalid_date_count": 0,
+        "animal_date_duplicate_rows": 0,
+        "valid": True,
+        "files_loaded": 0,
+        "files_scanned": 0,
+        "source_label": source_label,
+    }
+
+
+def load_milk_events_from_directory(directory: str | Path, source_label: str = "auto_raw_milk") -> tuple[pd.DataFrame, dict[str, Any]]:
+    files = discover_milk_event_files(directory)
+    if not files:
+        return pd.DataFrame(columns=[f.name for f in MILK_FIELDS]), _empty_milk_validation(source_label)
+
+    loaded_frames: list[pd.DataFrame] = []
+    validation_rows: list[dict[str, Any]] = []
+    files_loaded = 0
+
+    for file_path in files:
+        try:
+            file_df, validation = load_milk_events(file_path, source_label=f"{source_label}:{file_path.name}")
+        except Exception:
+            continue
+
+        validation_rows.append({"file": str(file_path), **validation})
+        if file_df.empty:
+            continue
+        if "milk_yield_l" not in file_df.columns or file_df["milk_yield_l"].notna().sum() == 0:
+            continue
+        files_loaded += 1
+        loaded_frames.append(file_df)
+
+    if not loaded_frames:
+        out_validation = _empty_milk_validation(source_label)
+        out_validation["files_scanned"] = len(files)
+        return pd.DataFrame(columns=[f.name for f in MILK_FIELDS]), out_validation
+
+    merged = pd.concat(loaded_frames, ignore_index=True)
+    if {"animal_id", "date"}.issubset(merged.columns):
+        merged = merged.sort_values(["animal_id", "date"]).drop_duplicates(subset=["animal_id", "date"], keep="last")
+
+    summary_validation = _validate(merged, MILK_FIELDS, date_col="date")
+    summary_validation["files_loaded"] = files_loaded
+    summary_validation["files_scanned"] = len(files)
+    summary_validation["source_label"] = source_label
+    summary_validation["per_file"] = validation_rows
+    return merged.reset_index(drop=True), summary_validation

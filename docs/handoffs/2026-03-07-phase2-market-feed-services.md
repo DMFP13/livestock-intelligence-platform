@@ -162,3 +162,110 @@ Refactored the Streamlit presentation layer to a clearer livestock intelligence 
 ### Remaining Gaps
 - Streamlit deprecation warnings for `use_container_width` remain (presentation cleanup pending).
 - Overview insights are deterministic heuristics; no new predictive logic added.
+
+---
+
+## Reliability Update: Raw Validation Tracking + Rolling Source Health (2026-03-07)
+
+### Objective Completed
+Improved ingestion observability and source health classification without changing visual design patterns or canonical query architecture.
+
+### What Changed
+1. Raw payload validation tracking
+- Updated ingestion pipeline to map validator errors back to raw rows.
+- Raw records now transition from `pending` to:
+  - `valid`
+  - `invalid`
+- Validation error text is stored per invalid raw row.
+
+2. Source health classification (rolling window)
+- Source health now includes rolling-window run stats and classification.
+- Health class is computed from latest status + recent failure behavior.
+- Historical failures outside the window are ignored for active health classification.
+- New per-source fields include:
+  - `latest_run_status`
+  - `recent_runs`
+  - `recent_failed_runs`
+  - `recent_failure_rate`
+  - `recent_validation_errors`
+  - `health_class`
+
+3. Data Quality page logic
+- Data Quality now renders a live-source health table with rolling-window fields.
+- Includes health class, recent failures, and validation-error visibility.
+
+4. Live visibility path alignment
+- Connector visibility now treats `health_class=failing` as failing-state evidence.
+
+5. Retry pacing foundation (same checkpoint)
+- Live polling retry loop now uses exponential backoff + jitter + minimum delay.
+- Retry delay plan is logged into each failed attempt’s `ingestion_runs.metadata_json`.
+
+### Files Changed
+- `packages/pipelines/ingestion_pipeline.py`
+- `packages/db/sqlite_store.py`
+- `packages/pipelines/live_sync.py`
+- `services/live_visibility.py`
+- `app/pages/data_quality.py`
+- `tests/test_live_data_foundation.py`
+- `tests/test_source_health_classification.py`
+
+### Tests Added/Updated
+- Updated:
+  - `tests/test_live_data_foundation.py` (raw validation status + invalid-row error tracking)
+- Added:
+  - `tests/test_source_health_classification.py` (rolling-window health behavior)
+
+### Test Status
+- Ran: `.venv/bin/python -m unittest discover -s tests -t . -v`
+- Result: `38 passed`, `0 failed`
+
+### Known Issues / Notes
+- Streamlit emits existing `use_container_width` deprecation warnings (pre-existing).
+- Codebase still uses `datetime.utcnow()` in multiple modules (deprecation warnings only).
+
+### Next Recommended Ticket
+`live-foundation-lease-safe-polling`
+- Add poll-job leasing/locking for multi-worker overlap prevention.
+- Include lease expiry and release semantics in `source_configs`/scheduler path.
+
+---
+
+## Overview Control-Centre Layout Update (2026-03-07)
+
+### Objective Completed
+Updated Overview to act as the control-centre with status-driven top cards, and removed source mode + global rolling-window/min-observation controls from the header.
+
+### Changes Implemented
+1. Overview top status cards
+- Added system-status card set:
+  - Herd health score
+  - Heat stress risk
+  - Milk production trend
+  - Market margin indicator
+  - Active alerts
+- Added status color + icon mapping:
+  - green / ✅ = normal
+  - yellow / ⚠️ = watch
+  - red / 🚨 = urgent
+
+2. Source mode removed from UI
+- Removed user-facing Source Mode toggle from main header.
+- Data loading now runs canonical-first with processed-file fallback automatically.
+
+3. Removed global rolling-window controls
+- Removed top-level rolling window and minimum observation sliders.
+- Kept stable internal defaults for downstream analysis (`14` days, `7` min observations).
+
+### Files Changed
+- `app/main.py`
+- `app/pages/overview.py`
+- `services/overview_queries.py`
+
+### Validation
+- Ran: `.venv/bin/python -m unittest discover -s tests -t . -v`
+- Result: `42 passed`, `0 failed`
+
+### Notes
+- Page-specific controls on Farm/Herd pages remain unchanged.
+- No connector or canonical schema changes in this UI slice.
