@@ -118,6 +118,7 @@ def delete_farm(farm_id: str) -> dict[str, Any]:
 @app.post("/admin/truncate/{table}")
 def truncate_table(table: str) -> dict[str, Any]:
     service.truncate_table(table)
+    analytics.bust_cache()
     return {"truncated": table}
 
 
@@ -196,13 +197,15 @@ async def ingestion_upload(
     tmp_path = uploads_dir / f"{connector_key}_{uuid4().hex}{suffix}"
     tmp_path.write_bytes(await file.read())
     try:
-        return await run_in_threadpool(
+        result = await run_in_threadpool(
             service.run_ingestion,
             connector_key=connector_key,
             source_system=source_system,
             mode="uploaded_file",
             config={"file_path": str(tmp_path), "farm_id": farm_id},
         )
+        analytics.bust_cache()
+        return result
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -277,13 +280,15 @@ async def live_sync_poll_cycle(request: Request) -> dict[str, Any]:
 @app.post("/ingestion/run")
 async def ingestion_run(request: Request) -> dict[str, Any]:
     payload = await request.json()
-    return await run_in_threadpool(
+    result = await run_in_threadpool(
         service.run_ingestion,
         connector_key=str(payload.get("connectorKey")),
         source_system=str(payload.get("sourceSystem")),
         mode=str(payload.get("mode", "uploaded_file")),
         config=dict(payload.get("config") or {}),
     )
+    analytics.bust_cache()
+    return result
 
 
 def run(host: str = "0.0.0.0", port: int = 8080) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from datetime import date, datetime
 from typing import Any
 
@@ -18,6 +19,19 @@ from services.overview_queries import build_overview_payload
 
 OUTCOME_WINDOW = 14
 OUTCOME_MIN_OBS = 7
+
+# Pulling+pivoting the full observation set (and, worse, running outcome/state-timeseries
+# analysis over it) is CPU-heavy enough on a free-tier instance to blow past client timeouts
+# (Vercel's serverless function limit, Render's own edge timeout) if redone on every request.
+# Short TTL cache so back-to-back page loads (portfolio -> farm -> animal) reuse the same pull.
+_CACHE_TTL_SECONDS = 30
+_df_cache: dict[str, Any] = {"value": None, "at": 0.0}
+_outcome_cache: dict[str, Any] = {"value": None, "at": 0.0}
+
+
+def bust_cache() -> None:
+    _df_cache["value"] = None
+    _outcome_cache["value"] = None
 
 
 def json_safe(obj: Any) -> Any:
@@ -49,7 +63,25 @@ def json_safe(obj: Any) -> Any:
 
 
 def load_canonical_df(service: PlatformService) -> pd.DataFrame:
-    return query_canonical_observations(service)
+    now = time.monotonic()
+    if _df_cache["value"] is not None and now - _df_cache["at"] < _CACHE_TTL_SECONDS:
+        return _df_cache["value"]
+    df = query_canonical_observations(service)
+    _df_cache["value"] = df
+    _df_cache["at"] = now
+    return df
+
+
+def _outcome_bundle(service: PlatformService, df: pd.DataFrame) -> dict[str, Any]:
+    now = time.monotonic()
+    if _outcome_cache["value"] is not None and now - _outcome_cache["at"] < _CACHE_TTL_SECONDS:
+        return _outcome_cache["value"]
+    bundle = build_outcome_linkage_analysis(
+        df, milk_df=pd.DataFrame(), repro_df=pd.DataFrame(), window=OUTCOME_WINDOW, min_obs=OUTCOME_MIN_OBS
+    )
+    _outcome_cache["value"] = bundle
+    _outcome_cache["at"] = now
+    return bundle
 
 
 def build_overview(service: PlatformService, *, selected_farm: str | None = None) -> dict[str, Any]:
@@ -69,9 +101,7 @@ def build_overview(service: PlatformService, *, selected_farm: str | None = None
 
 def build_farm_profile(service: PlatformService, farm_id: str) -> dict[str, Any] | None:
     df = load_canonical_df(service)
-    outcome_bundle = build_outcome_linkage_analysis(
-        df, milk_df=pd.DataFrame(), repro_df=pd.DataFrame(), window=OUTCOME_WINDOW, min_obs=OUTCOME_MIN_OBS
-    )
+    outcome_bundle = _outcome_bundle(service, df)
     payload = build_farm_overview_payload(
         df,
         farm_id,
@@ -109,9 +139,7 @@ def build_feed_environment(service: PlatformService, *, selected_farm: str | Non
 
 def build_animal_profile(service: PlatformService, animal_id: str) -> dict[str, Any] | None:
     df = load_canonical_df(service)
-    outcome_bundle = build_outcome_linkage_analysis(
-        df, milk_df=pd.DataFrame(), repro_df=pd.DataFrame(), window=OUTCOME_WINDOW, min_obs=OUTCOME_MIN_OBS
-    )
+    outcome_bundle = _outcome_bundle(service, df)
     payload = build_cow_profile_payload(
         df,
         animal_id,
@@ -131,9 +159,7 @@ def build_animal_timeseries(service: PlatformService, animal_id: str, metrics: l
 
 def build_outcomes(service: PlatformService) -> dict[str, Any]:
     df = load_canonical_df(service)
-    bundle = build_outcome_linkage_analysis(
-        df, milk_df=pd.DataFrame(), repro_df=pd.DataFrame(), window=OUTCOME_WINDOW, min_obs=OUTCOME_MIN_OBS
-    )
+    bundle = _outcome_bundle(service, df)
     return json_safe(
         {
             "data_availability": bundle.get("data_availability"),
