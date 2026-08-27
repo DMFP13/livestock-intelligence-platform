@@ -91,6 +91,12 @@ MIGRATIONS: list[str] = [
     );
     """,
     """
+    CREATE INDEX IF NOT EXISTS idx_observations_created_at ON observations (created_at DESC);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_observations_farm_id ON observations (farm_id);
+    """,
+    """
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY,
       organization_id TEXT,
