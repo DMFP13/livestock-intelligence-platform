@@ -495,12 +495,25 @@ class PostgresStore:
         return "id"
 
     def fetch_rows(self, table: str, limit: int = 200) -> list[dict[str, Any]]:
+        import time
+
+        t0 = time.monotonic()
         with self.connect() as conn:
+            t1 = time.monotonic()
             order_col = self._order_column(conn, table)
+            t2 = time.monotonic()
             rows = conn.execute(
                 f"SELECT * FROM {table} ORDER BY {order_col} DESC LIMIT %s", (limit,)
             ).fetchall()
-        return [dict(r) for r in rows]
+            t3 = time.monotonic()
+        result = [dict(r) for r in rows]
+        t4 = time.monotonic()
+        if limit > 1000:
+            print(
+                f"[timing] fetch_rows({table}, limit={limit}) connect_s={t1-t0:.2f} "
+                f"order_col_s={t2-t1:.2f} query_s={t3-t2:.2f} dictify_s={t4-t3:.2f} rows={len(rows)}"
+            )
+        return result
 
     def fetch_rows_scoped(
         self,

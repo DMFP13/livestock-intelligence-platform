@@ -65,8 +65,12 @@ def json_safe(obj: Any) -> Any:
 def load_canonical_df(service: PlatformService) -> pd.DataFrame:
     now = time.monotonic()
     if _df_cache["value"] is not None and now - _df_cache["at"] < _CACHE_TTL_SECONDS:
+        print(f"[timing] load_canonical_df CACHE HIT age_s={now - _df_cache['at']:.2f}")
         return _df_cache["value"]
+    t0 = time.monotonic()
     df = query_canonical_observations(service)
+    t1 = time.monotonic()
+    print(f"[timing] load_canonical_df CACHE MISS total_s={t1 - t0:.2f} rows={len(df)}")
     _df_cache["value"] = df
     _df_cache["at"] = now
     return df
