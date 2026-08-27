@@ -1,12 +1,22 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+// The backend can be genuinely slow (or hang) on a resource-constrained free-tier instance under
+// a cold analytics cache. Bound the wait so the UI can show a retry option instead of spinning
+// forever with no feedback.
+const REQUEST_TIMEOUT_MS = 45000;
 
 async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`GET ${path} failed (${res.status}): ${body}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store", signal: controller.signal });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`GET ${path} failed (${res.status}): ${body}`);
+    }
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json() as Promise<T>;
 }
 
 async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
