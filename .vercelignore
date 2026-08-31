@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+web/node_modules/
+web/.next/
+legacy/
+sample_data/
+data/
+outputs/
+docs/
+tests/
+.git/

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -191,7 +192,9 @@ async def ingestion_upload(
     connector_key: str = Form("sensor_upload"),
     source_system: str = Form("api_upload"),
 ) -> dict[str, Any]:
-    uploads_dir = Path("data/uploads")
+    # tempfile.gettempdir() resolves to /tmp on both Render and Vercel's serverless runtime --
+    # unlike a relative "data/uploads" path, that's writable in both environments.
+    uploads_dir = Path(tempfile.gettempdir()) / "livestock-uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "upload.csv").suffix or ".csv"
     tmp_path = uploads_dir / f"{connector_key}_{uuid4().hex}{suffix}"
