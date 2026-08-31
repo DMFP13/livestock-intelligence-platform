@@ -1,8 +1,8 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-// The backend can be genuinely slow (or hang) on a resource-constrained free-tier instance under
-// a cold analytics cache. Bound the wait so the UI can show a retry option instead of spinning
-// forever with no feedback.
-const REQUEST_TIMEOUT_MS = 45000;
+// The backend is on Render's free plan: it sleeps after ~15 min idle and can take 30-60s to
+// cold-start on the next request, on top of genuinely slow analytics queries on a cold cache.
+// Bound the wait generously enough to cover a cold start rather than aborting mid-wake-up.
+const REQUEST_TIMEOUT_MS = 75000;
 
 async function apiGet<T>(path: string): Promise<T> {
   const controller = new AbortController();
