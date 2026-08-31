@@ -50,8 +50,7 @@ export function FarmOverviewClient() {
     return (
       <div className="flex items-center gap-3 py-16 text-sm text-[var(--foreground-muted)]">
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--primary)]" />
-        Loading portfolio — the free-tier API sleeps when idle, so this can take up to a minute on
-        first load.
+        Loading portfolio — first load can take a while on a cold start or a large dataset.
       </div>
     );
   }
@@ -59,7 +58,7 @@ export function FarmOverviewClient() {
   if (state === "error" || !overview) {
     return (
       <Panel>
-        <EmptyState message="Still no response after a while — the free-tier API may be slow to wake up. Give it a moment and retry." />
+        <EmptyState message="Still no response after a while — the query may be slow on a cold start. Give it a moment and retry." />
         <div className="mt-4">
           <Button variant="secondary" onClick={load}>
             Retry
